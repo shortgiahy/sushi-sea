@@ -21,3 +21,9 @@ Append-only. One entry per session, newest last. Format:
 - Decisions: `docs/PRD.md` is a one-way mirror of the vault PRD, enforced by a sync script rather than by discipline — the staged copy had already drifted (it still claimed the repo-layout question was open after §10/§13 Q1 were resolved on 2026-07-05) · mem0 declared at repo root so subagents inherit it, not per-agent
 - Blocked/Open: `MEM0_API_KEY` unset in the migration environment, so mem0 tools were unavailable and no memories were written — Giahy must set it as an environment secret · `dev` branch does not exist yet
 - Next: Giahy setup checklist (dev branch, MEM0_API_KEY, branch protection), then M0 cook-verb grill-me — still the only thing blocking the vertical slice
+
+## 2026-07-28 — M0 prep: cook-verb analysis doc (dev-experience)
+- Done: `docs/design/m0-cook-verb-brief.md` — scores 5 candidate cook verbs (timing bar, filleting minigame, slicing swipe, hold-button, + added rhythm/combo tap) on mobile feel, skill expression, ~100×/session repetition tolerance, omakase-ceiling extensibility (Thread #6), and implementation cost; recommends timing bar for cook + tap-to-serve for serve, on branch `claude/sushi-m0-verb-brief`
+- Decisions: none locked — this is a recommendation only, for Giahy's grill-me session (Thread #1 stays open until he decides); `TASKS.md` M0-prep row moved to `review`
+- Blocked/Open: flagged one genuine open question inside the brief itself — PRD §5's plate-value formula has no slot for verb-execution quality (`cooking_extraction` is stat-driven, not verb-driven), so "what does skillful cooking actually reward" needs a beat in the grill-me session, not an invented fifth multiplier
+- Next: Giahy grill-me on the cook/serve verbs using this brief; on lock, update PRD §4 + check off Thread #1 + unblock M3/M4
