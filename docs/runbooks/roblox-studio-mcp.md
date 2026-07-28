@@ -24,42 +24,30 @@ Connects a local Claude Code session to a running Roblox Studio instance. **Giah
 
 **2. Connect Claude Code.** Claude Code is a supported Quick Connect client — select it in that same panel and Studio writes the client config itself. Use Quick Connect first.
 
-Fallback, if Quick Connect fails or the config needs to live somewhere specific:
+Fallback, if Quick Connect fails. Use `add-json` — it takes the blob whole and avoids shell-quoting the command:
+
+```powershell
+# Windows — PowerShell, NOT cmd (single quotes are what make this survive)
+claude mcp add-json Roblox_Studio '{"type":"stdio","command":"cmd.exe","args":["/c","cd /d %LOCALAPPDATA%\\Roblox && .\\mcp.bat"]}' --scope user
+```
 
 ```bash
 # macOS
-claude mcp add Roblox_Studio --scope local -- /Applications/RobloxStudio.app/Contents/MacOS/StudioMCP
-
-# Windows
-claude mcp add Roblox_Studio --scope local -- cmd.exe /c %LOCALAPPDATA%\Roblox\mcp.bat
+claude mcp add Roblox_Studio --scope user -- /Applications/RobloxStudio.app/Contents/MacOS/StudioMCP
 ```
 
-JSON equivalent, for clients that take a config file:
+**Take the Windows command from Studio's own panel, not from Roblox's docs.** The docs show `%LOCALAPPDATA%\Roblox\mcp.bat` invoked by absolute path; the panel emits `cd /d %LOCALAPPDATA%\Roblox && .\mcp.bat`. The batch file resolves paths relative to its own directory, so the absolute-path form can spawn and immediately fail — which looks identical to "never connected." Copy whatever the panel gives you.
 
-```json
-{
-  "mcpServers": {
-    "Roblox_Studio": {
-      "command": "/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"
-    }
-  }
-}
-```
+**3. Verify, in this order:**
 
-```json
-{
-  "mcpServers": {
-    "Roblox_Studio": {
-      "command": "cmd.exe",
-      "args": ["/c", "%LOCALAPPDATA%\\Roblox\\mcp.bat"]
-    }
-  }
-}
-```
+1. Quit Claude Code entirely — every window and terminal. stdio servers spawn at session start, so a running session never picks up new config. This is the single most common cause of "enabled but not connected."
+2. Studio open, place loaded.
+3. Start Claude Code → `claude mcp list` → `Roblox_Studio` reads connected.
+4. Studio panel now shows a green indicator with the connected-client count.
 
-**3. Verify:** green indicator under Manage MCP Servers = client connected. `/mcp` in Claude Code lists the tools.
+Read the indicator correctly: it counts *connected clients*. Enabling the toggle alone shows nothing — that is expected, not a failure.
 
-**Scope is `local` on purpose — do not commit this to `.mcp.json`.** The command is OS- and machine-specific, so one committed entry breaks on the other machine and fails outright in every cloud session. `.mcp.json` stays empty (same reasoning that moved mem0 to the plugin).
+**Scope is `user`, never committed to `.mcp.json`.** `user` writes to `~/.claude.json` (`%USERPROFILE%\.claude.json`) — machine-wide, private, out of git. `local` also stays out of git but binds to one project directory, so Studio access vanishes the moment you work from anywhere else. Committing to `.mcp.json` is the wrong answer either way: the command is an OS-specific absolute path, so it breaks on the other machine and fails in every cloud session. `.mcp.json` stays empty (same reasoning that moved mem0 to the plugin).
 
 ## Working rule — Studio MCP is an instrument, not an author
 
@@ -85,8 +73,11 @@ Anything the MCP surfaces that should persist gets written back into the repo as
 
 | Symptom | Fix |
 |---|---|
-| Server absent / no tools | Restart Studio *and* Claude Code, in that order |
-| Launch fails | Verify the binary path exists; check JSON syntax |
+| No green indicator, Studio side | Expected until a client connects. Check the client first — `claude mcp list` |
+| `Roblox_Studio` absent from `claude mcp list` | Config didn't land in a scope that session reads. Re-add with `--scope user` |
+| Listed but "failed" | Wrong command form (see the `cd /d` note above), or Studio wasn't running when the client spawned it |
+| Listed as connected, no tools | Restart Studio *and* Claude Code, in that order |
+| Launch fails | Verify the path exists; check JSON syntax — a missing comma stops the config loading |
 | Wrong place responds | Multiple Studio instances can share one client; the server picks by context. Force it with `list_roblox_studios` → `set_active_studio` |
 
 ## Security
