@@ -29,3 +29,4 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Su
 - Branches: `claude/sushi-<feature>` off `dev`. PRs target `dev`; merge needs green CI + `reviewer-code` + `reviewer-reality`. `dev`→`main` is Giahy-only.
 - Session end: update `TASKS.md`, append `BUILD_LOG.md`, save decisions to mem0, push everything. Unpushed work is lost.
 - Publishing to Roblox and Blender/Figma work are Giahy actions — hand over runbooks, never assume automation.
+- Studio MCP (Giahy's machine only, never cloud) is read/playtest-only: inspect, playtest, capture console + screenshots. Never author game code or assets through it — repo is source of truth, Rojo syncs one way, Studio-side writes die at the next sync. `docs/runbooks/roblox-studio-mcp.md`.
