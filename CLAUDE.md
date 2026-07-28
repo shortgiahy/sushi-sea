@@ -9,10 +9,12 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Su
 
 ## Memory (mem0)
 
-- mem0 MCP is declared in `.mcp.json`; it needs `MEM0_API_KEY` in the environment. If the tools are missing, say so — do not pretend memory happened.
-- Scope every call to `user_id: "giahy"`. Tag `metadata.type`: `project` (decisions with a why), `feedback` (Giahy's corrections), `reference` (pointers to external systems).
+- **Wiring (revised 2026-07-28):** mem0 comes from the Claude Code **mem0 plugin** (`/plugin install mem0@mem0-plugins`), installed at the account/environment level — not from a per-repo `.mcp.json` entry (that entry was removed; `.mcp.json` is now empty on purpose, to avoid duplicate tool registrations if both were declared). The plugin must be installed wherever a Sushi Sea session runs, and that environment still needs `MEM0_API_KEY` in the environment and `mcp.mem0.ai` reachable on the network — same backend, same auth, just installed once instead of declared per-repo. If the tools are missing, say so — do not pretend memory happened.
+- Tool names are plugin-prefixed (e.g. `mcp__plugin_mem0_mem0__add_memory`) and may show up as **deferred tools** — if a call fails because the schema isn't loaded, run `ToolSearch` with `"select:mcp__plugin_mem0_mem0__<tool_name>"` first.
+- **Scope every call explicitly** — `user_id: "giahy"`, `app_id: "sushi-sea"`. Do not rely on the plugin's auto-detected defaults: this account has a global `MEM0_PROJECT_ID=GitHub` environment variable that pins auto-detected `app_id` to `"GitHub"` regardless of which repo a session is rooted in, and the unclaimed-account default `user_id` is `"default"`. Passing both explicitly sidesteps that. Tag `metadata.type`: `project` (decisions with a why), `feedback` (Giahy's corrections), `reference` (pointers to external systems).
 - Search at task start, write at task end. Two memory layers, no overlap: **mem0 = durable decisions and their reasoning**, **git docs (`TASKS.md`, `BUILD_LOG.md`) = build state**. Never put status in mem0 or reasoning-only material in TASKS.
-- Subagents inherit this repo's MCP config — they can and should call mem0 themselves.
+- Subagents inherit the parent session's installed plugins — they can and should call mem0 themselves, with the same explicit `user_id`/`app_id`.
+- Sanity check anytime: `/mem0:health` (connectivity) and `/mem0:tour` (browse what's stored, filtered to the scope above).
 
 ## Hard invariants — stop and flag
 

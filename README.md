@@ -9,7 +9,7 @@ Developed by Claude agent teams under Giahy's direction.
 - `ROADMAP.md` — full development plan: phases, waves, gates
 - `TASKS.md` — live module status · `BUILD_LOG.md` — session log
 - `.claude/agents/` — the six-agent team (3 dev, 2 review, 1 Opus advisor)
-- `.mcp.json` — mem0 (durable decision memory, `user_id: giahy`); needs `MEM0_API_KEY`
+- mem0 (durable decision memory, `user_id: giahy`, `app_id: sushi-sea`) — via the Claude Code mem0 plugin, installed per-environment; needs `MEM0_API_KEY` + `mcp.mem0.ai` network access
 - `scripts/sync-prd.sh` — pull `docs/PRD.md` from the vault; `--check` detects drift
 
 Branches: `claude/sushi-<feature>` → PR to `dev` → Giahy gates `main`.
