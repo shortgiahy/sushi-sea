@@ -42,7 +42,6 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Item | Blocks |
 |---|---|
 | M0 cook-verb grill-me session | M3+, the whole vertical slice |
-| `MEM0_API_KEY` env secret | agent memory (tools absent without it) |
+| Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist | agent memory (tools absent without both) |
 | Branch protection on `main` | process safety |
-| Dedicated claude.ai/code environment for this repo (+ MIMIR vault as second source) | session ergonomics, PRD sync |
 | Figma workspace | M6/M18 |

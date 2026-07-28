@@ -23,7 +23,7 @@ Roblox hybrid of *Dave the Diver* / *RuneScape* / *Fisch* / restaurant sim. Fish
 | Merge gate | Feature branches → PR to `dev`: merge on green CI + `reviewer-code` + `reviewer-reality` approval. `dev` → `main`: **Giahy only**, at module boundaries |
 | Tools | Roblox Studio (Rojo-synced) · Blender (manifest + bpy scripts) · GitHub · **Figma** (UI design) |
 | Memory | Git docs (this file, TASKS, BUILD_LOG) = build state. mem0 (`user_id: giahy`) = durable decisions/facts. No cross-session agent memory exists — files are the memory |
-| mem0 wiring | Declared in `.mcp.json` at the repo root, so every session and subagent gets it. Requires `MEM0_API_KEY` in the environment (claude.ai/code environment secret) — without it the tools silently don't appear. Every agent's protocol block carries the search-first/write-last rule |
+| mem0 wiring | Declared in `.mcp.json` at the repo root, so every session and subagent gets it. Needs two things in the cloud environment: `MEM0_API_KEY` as an environment variable, and `mcp.mem0.ai` on the network allowlist (**Custom** access — it is not in the Trusted default list, and a `.mcp.json` HTTP server dials out over the session's own network). Missing either and the tools just don't appear. Every agent's protocol block carries the search-first/write-last rule |
 
 ## Session protocol
 
@@ -83,8 +83,10 @@ Base personalities from [msitarzewski/agency-agents](https://github.com/msitarze
 - [x] Create the `dev` branch — done 2026-07-28, seeded at the migration commit. `main` stays at the initial commit until Giahy merges at a module boundary
 - [ ] Protect `main` on GitHub (Settings → Branches): require PR, no direct pushes
 - [ ] Optional: require 2 approvals on PRs into `dev` (agents approve via review; server-side enforcement is belt-and-suspenders)
-- [ ] Create a dedicated claude.ai/code environment pointed at this repo (Projects-equivalent: every session auto-loads repo, CLAUDE.md, agents)
-- [ ] Set `MEM0_API_KEY` as a secret in that environment — mem0 tools do not appear without it
-- [ ] Add the MIMIR vault as a second source in that environment (gives agents the canonical PRD and makes `scripts/sync-prd.sh` work)
+- [ ] Create a **Sushi Sea** cloud environment at claude.ai/code (cloud icon above the message box → **Add cloud environment**). Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
+- [ ] In that environment, set **Network access → Custom**, add `mcp.mem0.ai`, and tick *also include the default list* — mem0 is an HTTP MCP server dialing out over the session network, and its host is not on the Trusted allowlist
+- [ ] In that environment, add `MEM0_API_KEY=...` under **Environment variables**. There is no secrets store; env vars are readable by anyone using the environment, so scope the key and rotate it if the environment is ever shared
+- [ ] Verify: start a session on this repo in that environment and confirm the mem0 tools are present before trusting any agent's "saved to memory"
+- [ ] Pull the MIMIR vault into a session alongside this repo whenever the PRD needs syncing — `scripts/sync-prd.sh` expects it as a sibling directory, or `MIMIR_VAULT` pointed at it
 - [ ] Figma workspace for UI design (needed by M6/M18, not now)
 - [ ] Roblox Creator Hub remains yours — publishing is always a Giahy action
