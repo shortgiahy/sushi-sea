@@ -42,7 +42,6 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Item | Blocks |
 |---|---|
 | M0 cook-verb grill-me session | M3+, the whole vertical slice |
-| Create `dev` branch | every PR in the repo |
 | `MEM0_API_KEY` env secret | agent memory (tools absent without it) |
 | Branch protection on `main` | process safety |
 | Dedicated claude.ai/code environment for this repo (+ MIMIR vault as second source) | session ergonomics, PRD sync |

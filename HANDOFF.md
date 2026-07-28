@@ -80,7 +80,7 @@ Base personalities from [msitarzewski/agency-agents](https://github.com/msitarze
 
 ## Giahy's one-time setup checklist
 
-- [ ] Create the `dev` branch off `main` (every feature branch and PR in this repo targets it; it does not exist yet)
+- [x] Create the `dev` branch — done 2026-07-28, seeded at the migration commit. `main` stays at the initial commit until Giahy merges at a module boundary
 - [ ] Protect `main` on GitHub (Settings → Branches): require PR, no direct pushes
 - [ ] Optional: require 2 approvals on PRs into `dev` (agents approve via review; server-side enforcement is belt-and-suspenders)
 - [ ] Create a dedicated claude.ai/code environment pointed at this repo (Projects-equivalent: every session auto-loads repo, CLAUDE.md, agents)
