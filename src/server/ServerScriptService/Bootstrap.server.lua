@@ -1,0 +1,4 @@
+-- Bootstrap: wires all services on server start, no game logic here (PRD §7.1 names this Init.server.lua;
+-- renamed because Rojo treats a literal init.server.lua as a folder-collapsing script on case-insensitive
+-- filesystems, which would fold ServerScriptService itself into a Script and break the Services/ tree — verified
+-- via a local rojo build during M1; see BUILD_LOG.md 2026-07-28)
