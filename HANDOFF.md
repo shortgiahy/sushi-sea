@@ -22,14 +22,14 @@ Roblox hybrid of *Dave the Diver* / *RuneScape* / *Fisch* / restaurant sim. Fish
 | Comments | PRD §8 stands: why-comments only. Reasoning lives in commit messages, PR Reasoning sections, `BUILD_LOG.md` |
 | Merge gate | Feature branches → PR to `dev`: merge on green CI + `reviewer-code` + `reviewer-reality` approval. `dev` → `main`: **Giahy only**, at module boundaries |
 | Tools | Roblox Studio (Rojo-synced) · Blender (manifest + bpy scripts) · GitHub · **Figma** (UI design) |
-| Memory | Git docs (this file, TASKS, BUILD_LOG) = build state. mem0 (`user_id: giahy`) = durable decisions/facts. No cross-session agent memory exists — files are the memory |
-| mem0 wiring | Declared in `.mcp.json` at the repo root, so every session and subagent gets it. Needs two things in the cloud environment: `MEM0_API_KEY` as an environment variable, and `mcp.mem0.ai` on the network allowlist (**Custom** access — it is not in the Trusted default list, and a `.mcp.json` HTTP server dials out over the session's own network). Missing either and the tools just don't appear. Every agent's protocol block carries the search-first/write-last rule |
+| Memory | Git docs (this file, TASKS, BUILD_LOG) = build state. mem0 (`user_id: giahy`, `app_id: sushi-sea`) = durable decisions/facts. No cross-session agent memory beyond mem0 exists — files are the memory otherwise |
+| mem0 wiring (**revised 2026-07-28**, was: declared in `.mcp.json`) | The Claude Code **mem0 plugin** (`/plugin install mem0@mem0-plugins`) must be installed in every environment that runs a Sushi Sea session — this is now an account/environment-level install, not a per-repo `.mcp.json` entry (that entry was removed to avoid duplicate tool registrations). The environment still needs, exactly as before: `MEM0_API_KEY` as an environment variable, and `mcp.mem0.ai` on the network allowlist (**Custom** access — it is not in the Trusted default list). Missing either and the tools just don't appear. New requirement vs. the old wiring: always pass `user_id`/`app_id` explicitly — this account has a global `MEM0_PROJECT_ID=GitHub` var that would otherwise pin auto-detected `app_id` to `"GitHub"` in any repo. Every agent's protocol block carries the search-first/write-last rule and the explicit scoping |
 
 ## Session protocol
 
 ### Start (orchestrator, Sonnet)
 1. Read `HANDOFF.md` (this file) → `ROADMAP.md` (current phase/wave) → `TASKS.md` → last ~3 entries of `BUILD_LOG.md`
-2. Search mem0 (`search_memories`, `user_id: giahy`) for recent Sushi Sea decisions
+2. Search mem0 (`search_memories`, `user_id: giahy`, `app_id: sushi-sea`) for recent Sushi Sea decisions
 3. `git fetch`; check open PRs and `dev` state
 4. Dispatch the current wave (see TASKS.md) to worker agents, one branch per task
 
@@ -83,10 +83,12 @@ Base personalities from [msitarzewski/agency-agents](https://github.com/msitarze
 - [x] Create the `dev` branch — done 2026-07-28, seeded at the migration commit. `main` stays at the initial commit until Giahy merges at a module boundary
 - [ ] Protect `main` on GitHub (Settings → Branches): require PR, no direct pushes
 - [ ] Optional: require 2 approvals on PRs into `dev` (agents approve via review; server-side enforcement is belt-and-suspenders)
-- [ ] Create a **Sushi Sea** cloud environment at claude.ai/code (cloud icon above the message box → **Add cloud environment**). Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
-- [ ] In that environment, set **Network access → Custom**, add `mcp.mem0.ai`, and tick *also include the default list* — mem0 is an HTTP MCP server dialing out over the session network, and its host is not on the Trusted allowlist
-- [ ] In that environment, add `MEM0_API_KEY=...` under **Environment variables**. There is no secrets store; env vars are readable by anyone using the environment, so scope the key and rotate it if the environment is ever shared
-- [ ] Verify: start a session on this repo in that environment and confirm the mem0 tools are present before trusting any agent's "saved to memory"
+- [ ] Configure the **Default** cloud environment at claude.ai/code (cloud icon above the message box → hover Default → settings gear). One environment, not a Sushi-Sea-specific one: the vault needs mem0 on identical terms, and a second environment is one more thing to remember to select. Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
+  - **Network access → Custom**, add `mcp.mem0.ai`, tick *also include the default list*. Verified 2026-07-28: under Trusted that host fails the CONNECT tunnel with a proxy 403 while `api.github.com` and `registry.npmjs.org` return 200 — mem0 is an HTTP MCP server dialing out over the session network
+  - **Environment variables** → `MEM0_API_KEY=...`. No secrets store exists; env vars are readable by anyone using the environment, so keep the key scoped
+  - Install the mem0 plugin: `/plugin marketplace add mem0ai/mem0` then `/plugin install mem0@mem0-plugins` (**new step, 2026-07-28** — mem0 is no longer wired via `sushi-sea/.mcp.json`, that entry was removed; it's now an account/environment-level plugin install, same as the vault would use)
+  - All three are required. Missing any one leaves the mem0 tools absent with no error pointing at the cause
+- [ ] Verify in a **new** session — running sessions copy env vars once at startup and never re-read them. Confirm the mem0 tools are present (`/mem0:health`) before trusting any agent's "saved to memory". Note: cross-session write/read was confirmed working locally on 2026-07-28 via the plugin — this checkbox is specifically about confirming it *in the actual cloud environment*, which is untested
 - [ ] Pull the MIMIR vault into a session alongside this repo whenever the PRD needs syncing — `scripts/sync-prd.sh` expects it as a sibling directory, or `MIMIR_VAULT` pointed at it
 - [ ] Figma workspace for UI design (needed by M6/M18, not now)
 - [ ] Roblox Creator Hub remains yours — publishing is always a Giahy action

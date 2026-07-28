@@ -42,6 +42,6 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Item | Blocks |
 |---|---|
 | M0 cook-verb grill-me session | M3+, the whole vertical slice |
-| Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist | agent memory (tools absent without both) |
+| Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist + mem0 plugin installed (`/plugin install mem0@mem0-plugins`) | agent memory (tools absent without all three) |
 | Branch protection on `main` | process safety |
 | Figma workspace | M6/M18 |
