@@ -83,10 +83,11 @@ Base personalities from [msitarzewski/agency-agents](https://github.com/msitarze
 - [x] Create the `dev` branch — done 2026-07-28, seeded at the migration commit. `main` stays at the initial commit until Giahy merges at a module boundary
 - [ ] Protect `main` on GitHub (Settings → Branches): require PR, no direct pushes
 - [ ] Optional: require 2 approvals on PRs into `dev` (agents approve via review; server-side enforcement is belt-and-suspenders)
-- [ ] Create a **Sushi Sea** cloud environment at claude.ai/code (cloud icon above the message box → **Add cloud environment**). Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
-- [ ] In that environment, set **Network access → Custom**, add `mcp.mem0.ai`, and tick *also include the default list* — mem0 is an HTTP MCP server dialing out over the session network, and its host is not on the Trusted allowlist
-- [ ] In that environment, add `MEM0_API_KEY=...` under **Environment variables**. There is no secrets store; env vars are readable by anyone using the environment, so scope the key and rotate it if the environment is ever shared
-- [ ] Verify: start a session on this repo in that environment and confirm the mem0 tools are present before trusting any agent's "saved to memory"
+- [ ] Configure the **Default** cloud environment at claude.ai/code (cloud icon above the message box → hover Default → settings gear). One environment, not a Sushi-Sea-specific one: the vault needs mem0 on identical terms, and a second environment is one more thing to remember to select. Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
+  - **Network access → Custom**, add `mcp.mem0.ai`, tick *also include the default list*. Verified 2026-07-28: under Trusted that host fails the CONNECT tunnel with a proxy 403 while `api.github.com` and `registry.npmjs.org` return 200 — mem0 is an HTTP MCP server dialing out over the session network
+  - **Environment variables** → `MEM0_API_KEY=...`. No secrets store exists; env vars are readable by anyone using the environment, so keep the key scoped
+  - Both are required. Either one alone leaves the mem0 tools absent with no error pointing at the cause
+- [ ] Verify in a **new** session — running sessions copy env vars once at startup and never re-read them. Confirm the mem0 tools are present before trusting any agent's "saved to memory"
 - [ ] Pull the MIMIR vault into a session alongside this repo whenever the PRD needs syncing — `scripts/sync-prd.sh` expects it as a sibling directory, or `MIMIR_VAULT` pointed at it
 - [ ] Figma workspace for UI design (needed by M6/M18, not now)
 - [ ] Roblox Creator Hub remains yours — publishing is always a Giahy action
