@@ -7,17 +7,17 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Task | Agent | Status | Branch/PR |
 |---|---|---|---|
 | M1 toolchain skeleton + CI | dev-systems | review | `claude/sushi-m1-toolchain` |
-| M2 player data backbone | dev-systems | review | `claude/sushi-m2-playerdata` |
-| M0 prep: cook-verb analysis doc | dev-experience | todo | — |
+| M2 player data backbone | dev-systems | todo (after M1) | — |
+| M0 prep: cook-verb analysis doc | dev-experience | review | `claude/sushi-m0-verb-brief` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
 
 ## Modules
 
 | # | Module | Deps | Status |
 |---|---|---|---|
-| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | blocked (Giahy) |
-| M1 | Repo + toolchain skeleton | — | review |
-| M2 | Player data backbone | M1 | review |
+| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | done — locked 2026-07-28 (Giahy): timing bar (cook) + tap-to-serve (serve), see below; PRD §4 vault sync pending |
+| M1 | Repo + toolchain skeleton | — | todo |
+| M2 | Player data backbone | M1 | todo |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
 | M4 ⚡ | Conversion core + cook verb | M0, M3 | todo |
 | M5 ⚡ | Serve verb + economy faucet | M4 | todo |
@@ -42,6 +42,13 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Item | Blocks |
 |---|---|
 | M0 cook-verb grill-me session | M3+, the whole vertical slice |
-| Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist | agent memory (tools absent without both) |
+| Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist + mem0 plugin installed (`/plugin install mem0@mem0-plugins`) | agent memory (tools absent without all three) |
+| Local machine: enable Studio's built-in MCP server + Quick Connect Claude Code (`docs/runbooks/roblox-studio-mcp.md`) | Studio-side verification, playtest evidence for `reviewer-reality` |
 | Branch protection on `main` | process safety |
 | Figma workspace | M6/M18 |
+
+## M0 lock (2026-07-28, Giahy)
+
+**Cook verb: timing bar. Serve verb: tap-to-serve.** Adopted from the `dev-experience` recommendation in `docs/design/m0-cook-verb-brief.md` (branch `claude/sushi-m0-verb-brief`) without a full grill-me session — Giahy's ruling: the verb's specific mechanics are decoupled from the rest of the game by design (PRD §7.6: `ConversionModule.cook(fish) → plate` is the one canonical conversion function; the boat verb and, later, staff AI are just swappable drivers around it), so the choice doesn't warrant blocking other work. M3/M4 are unblocked. Open question from the brief (what verb-execution skill should reward, since PRD §5's plate-value formula has no slot for it) is deferred, not resolved — revisit if/when it actually matters for a specific module, not before.
+
+**Not yet done:** PRD §4 itself is unchanged — this lock lives in this file and mem0 until someone updates the vault-side PRD and runs `scripts/sync-prd.sh`.
