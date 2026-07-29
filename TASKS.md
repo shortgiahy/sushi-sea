@@ -6,7 +6,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | Task | Agent | Status | Branch/PR |
 |---|---|---|---|
-| M1 toolchain skeleton + CI | dev-systems | todo | — |
+| M1 toolchain skeleton + CI | dev-systems | review | `claude/sushi-m1-toolchain` |
 | M2 player data backbone | dev-systems | todo (after M1) | — |
 | M0 prep: cook-verb analysis doc | dev-experience | review | `claude/sushi-m0-verb-brief` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
