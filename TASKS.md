@@ -8,14 +8,15 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 |---|---|---|---|
 | M1 toolchain skeleton + CI | dev-systems | todo | — |
 | M2 player data backbone | dev-systems | todo (after M1) | — |
-| M0 prep: cook-verb analysis doc | dev-experience | todo | — |
+| ~~M0 prep: cook-verb analysis doc~~ | dev-experience | superseded | Grill-me ran directly; see `docs/design/cook-verb.md` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
+| Apply M0 PRD edits in the MIMIR vault (§9 of the verb doc), then `scripts/sync-prd.sh` | Giahy | todo | — |
 
 ## Modules
 
 | # | Module | Deps | Status |
 |---|---|---|---|
-| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | blocked (Giahy) |
+| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | review (verbs locked 2026-07-29 → `docs/design/cook-verb.md`; done when the §9 PRD edits land in the vault) |
 | M1 | Repo + toolchain skeleton | — | todo |
 | M2 | Player data backbone | M1 | todo |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
@@ -41,7 +42,8 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | Item | Blocks |
 |---|---|
-| M0 cook-verb grill-me session | M3+, the whole vertical slice |
+| ~~M0 cook-verb grill-me session~~ — done 2026-07-29 | ~~M3+, the whole vertical slice~~ |
+| Apply the M0 PRD edits vault-side (`docs/design/cook-verb.md` §9), then `scripts/sync-prd.sh` | M0 → done; M4/M5/M17 acceptance criteria |
 | Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist + mem0 plugin installed (`/plugin install mem0@mem0-plugins`) | agent memory (tools absent without all three) |
 | Local machine: enable Studio's built-in MCP server + Quick Connect Claude Code (`docs/runbooks/roblox-studio-mcp.md`) | Studio-side verification, playtest evidence for `reviewer-reality` |
 | Branch protection on `main` | process safety |
