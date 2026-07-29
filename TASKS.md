@@ -6,9 +6,9 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | Task | Agent | Status | Branch/PR |
 |---|---|---|---|
-| M1 toolchain skeleton + CI | dev-systems | todo | — |
+| M1 toolchain skeleton + CI | dev-systems | review | `claude/sushi-m1-toolchain` |
 | M2 player data backbone | dev-systems | todo (after M1) | — |
-| ~~M0 prep: cook-verb analysis doc~~ | dev-experience | superseded | Grill-me ran directly; see `docs/design/cook-verb.md` |
+| M0 prep: cook-verb analysis doc | dev-experience | review | `claude/sushi-m0-verb-brief` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
 | Apply M0 PRD edits in the MIMIR vault (§9 of the verb doc), then `scripts/sync-prd.sh` | Giahy | todo | — |
 
@@ -16,7 +16,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | # | Module | Deps | Status |
 |---|---|---|---|
-| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | review (verbs locked 2026-07-29 → `docs/design/cook-verb.md`; done when the §9 PRD edits land in the vault) |
+| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | done — locked 2026-07-28 (Giahy): timing bar (cook) + tap-to-serve (serve), see below; PRD §4 vault sync pending |
 | M1 | Repo + toolchain skeleton | — | todo |
 | M2 | Player data backbone | M1 | todo |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
@@ -48,3 +48,9 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Local machine: enable Studio's built-in MCP server + Quick Connect Claude Code (`docs/runbooks/roblox-studio-mcp.md`) | Studio-side verification, playtest evidence for `reviewer-reality` |
 | Branch protection on `main` | process safety |
 | Figma workspace | M6/M18 |
+
+## M0 lock (2026-07-28, Giahy)
+
+**Cook verb: timing bar. Serve verb: tap-to-serve.** Adopted from the `dev-experience` recommendation in `docs/design/m0-cook-verb-brief.md` (branch `claude/sushi-m0-verb-brief`) without a full grill-me session — Giahy's ruling: the verb's specific mechanics are decoupled from the rest of the game by design (PRD §7.6: `ConversionModule.cook(fish) → plate` is the one canonical conversion function; the boat verb and, later, staff AI are just swappable drivers around it), so the choice doesn't warrant blocking other work. M3/M4 are unblocked. Open question from the brief (what verb-execution skill should reward, since PRD §5's plate-value formula has no slot for it) is deferred, not resolved — revisit if/when it actually matters for a specific module, not before.
+
+**Not yet done:** PRD §4 itself is unchanged — this lock lives in this file and mem0 until someone updates the vault-side PRD and runs `scripts/sync-prd.sh`.
