@@ -15,7 +15,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | # | Module | Deps | Status |
 |---|---|---|---|
-| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | blocked (Giahy) |
+| M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | done — locked 2026-07-28 (Giahy): timing bar (cook) + tap-to-serve (serve), see below; PRD §4 vault sync pending |
 | M1 | Repo + toolchain skeleton | — | todo |
 | M2 | Player data backbone | M1 | todo |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
@@ -41,7 +41,13 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | Item | Blocks |
 |---|---|
-| M0 cook-verb grill-me session | M3+, the whole vertical slice |
+| Sync PRD §4 at the MIMIR vault with the M0 lock below (this repo's `docs/PRD.md` is a mirror and can't be edited directly) | Thread #1 (§12) formally closing; cosmetic only — M3+ already unblocked below |
 | Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist | agent memory (tools absent without both) |
 | Branch protection on `main` | process safety |
 | Figma workspace | M6/M18 |
+
+## M0 lock (2026-07-28, Giahy)
+
+**Cook verb: timing bar. Serve verb: tap-to-serve.** Adopted from the `dev-experience` recommendation in `docs/design/m0-cook-verb-brief.md` (branch `claude/sushi-m0-verb-brief`) without a full grill-me session — Giahy's ruling: the verb's specific mechanics are decoupled from the rest of the game by design (PRD §7.6: `ConversionModule.cook(fish) → plate` is the one canonical conversion function; the boat verb and, later, staff AI are just swappable drivers around it), so the choice doesn't warrant blocking other work. M3/M4 are unblocked. Open question from the brief (what verb-execution skill should reward, since PRD §5's plate-value formula has no slot for it) is deferred, not resolved — revisit if/when it actually matters for a specific module, not before.
+
+**Not yet done:** PRD §4 itself is unchanged — this lock lives in this file and mem0 until someone updates the vault-side PRD and runs `scripts/sync-prd.sh`.
