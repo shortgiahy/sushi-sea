@@ -18,7 +18,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | done — locked 2026-07-28 (Giahy): timing bar (cook) + tap-to-serve (serve), see below; PRD §4 vault sync pending |
 | M1 | Repo + toolchain skeleton | — | todo |
 | M2 | Player data backbone | M1 | todo |
-| M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
+| M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | review — `claude/sushi-m3-fishing-feel` (dev-gameplay). Cast→hook→reel implemented, headless-testable logic passes, `rojo build`/selene/stylua clean. NOT `done`: the feel gate (PRD §11 DoD, ROADMAP Phase 2) requires a blind/Giahy playtest, which this sandbox cannot run. Human tuning iteration in Studio is the explicit next step — see BUILD_LOG.md 2026-07-28 entry for the reasoning behind every placeholder number. |
 | M4 ⚡ | Conversion core + cook verb | M0, M3 | todo |
 | M5 ⚡ | Serve verb + economy faucet | M4 | todo |
 | M6 ⚡ | Basic spoilage + slice UI | M5 | todo |
