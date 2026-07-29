@@ -7,7 +7,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | Task | Agent | Status | Branch/PR |
 |---|---|---|---|
 | M1 toolchain skeleton + CI | dev-systems | review | `claude/sushi-m1-toolchain` |
-| M2 player data backbone | dev-systems | todo (after M1) | — |
+| M2 player data backbone | dev-systems | review | `claude/sushi-m2-playerdata` |
 | M0 prep: cook-verb analysis doc | dev-experience | todo | — |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
 
@@ -17,7 +17,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 |---|---|---|---|
 | M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | blocked (Giahy) |
 | M1 | Repo + toolchain skeleton | — | review |
-| M2 | Player data backbone | M1 | todo |
+| M2 | Player data backbone | M1 | review |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | todo |
 | M4 ⚡ | Conversion core + cook verb | M0, M3 | todo |
 | M5 ⚡ | Serve verb + economy faucet | M4 | todo |
