@@ -25,6 +25,15 @@
           },
           "Fishing_FightResult": {
             "$className": "RemoteEvent"
+          },
+          "Player_CookTrace": {
+            "$className": "RemoteEvent"
+          },
+          "Player_CookStroke": {
+            "$className": "RemoteEvent"
+          },
+          "Cooking_PortionsResolved": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

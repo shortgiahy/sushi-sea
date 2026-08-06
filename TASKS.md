@@ -19,7 +19,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | M1 | Repo + toolchain skeleton | — | todo |
 | M2 | Player data backbone | M1 | todo |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | review — `claude/sushi-m3-fishing-feel` (dev-gameplay). Cast→hook→reel implemented, headless-testable logic passes, `rojo build`/selene/stylua clean. NOT `done`: the feel gate (PRD §11 DoD, ROADMAP Phase 2) requires a blind/Giahy playtest, which this sandbox cannot run. Human tuning iteration in Studio is the explicit next step — see BUILD_LOG.md 2026-07-28 entry for the reasoning behind every placeholder number. |
-| M4 ⚡ | Conversion core + cook verb | M0, M3 | todo |
+| M4 ⚡ | Conversion core + cook verb | M0, M3 | review — `claude/sushi-m4-cook`. `ConversionModule.cook` (yield + grade per the 2026-07-29 cook-verb lock) implemented and headless-tested; `BoatCookController` drives it gray-box on the boat; caught fish now write into `PlayerDataService` inventory (deferred from M3); `rojo build`/selene/stylua clean. NOT `done`: needs a Studio playtest (feel + the "held fish" single-slot simplification) before the M5 serve verb builds on top. See BUILD_LOG.md 2026-08-06 entry. |
 | M5 ⚡ | Serve verb + economy faucet | M4 | todo |
 | M6 ⚡ | Basic spoilage + slice UI | M5 | todo |
 | M7 | Economy tuning model (numbers, with Giahy) | M6 | todo |

@@ -4,9 +4,11 @@ local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 
 local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
+local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 
 local dataStore = DataStoreService:GetDataStore("PlayerData_v1")
 local service = PlayerDataService.new(dataStore)
+PlayerDataAccess.setInstance(service)
 
 Players.PlayerAdded:Connect(function(player: Player)
     service:load(player.UserId, player.Name)

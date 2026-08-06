@@ -86,6 +86,40 @@ do
     print("PlayerDataSchema.spec: nil input -> fresh default OK")
 end
 
+-- v1 -> v2 (M4): a real schema-v1 save (no cookedPortions field at all, predating its addition)
+-- must gain an empty cookedPortions array and land on v2, without disturbing any v1 field.
+do
+    local v1Save = {
+        skills = {
+            fishing = { level = 3, xp = 50 },
+            cooking = { level = 2, xp = 10 },
+            sailing = { level = 1, xp = 0 },
+            hospitality = { level = 1, xp = 0 },
+            purchasing = { level = 1, xp = 0 },
+        },
+        inventory = { { id = "uuid-2", species = "tuna", caughtAt = 1718001000 } },
+        agingLocker = {},
+        restaurant = { tier = 0, staffHeadcount = 0, prestigePoints = 0, trophies = {} },
+        economy = { gold = 300, offlineSnapshotAt = 0, offlineStockCount = 0, tutorialLoanOwed = 500 },
+        meta = { schemaVersion = 1, firstJoinAt = 1717999000, lastJoinAt = 1718000000 },
+    }
+
+    local migrated = PlayerDataSchema.migrate(v1Save)
+
+    assert(migrated.meta.schemaVersion == 2, "a v1 save must migrate forward to schemaVersion 2")
+    assert(
+        type(migrated.cookedPortions) == "table" and #migrated.cookedPortions == 0,
+        "a v1 save must gain an empty cookedPortions array"
+    )
+    assert(migrated.skills.cooking.level == 2, "v1 -> v2 migration must not disturb existing skill data")
+    assert(migrated.economy.gold == 300, "v1 -> v2 migration must not disturb existing economy data")
+    assert(
+        #migrated.inventory == 1 and migrated.inventory[1].id == "uuid-2",
+        "v1 -> v2 migration must not disturb existing inventory"
+    )
+    print("PlayerDataSchema.spec: v1 -> v2 migration (cookedPortions addition) OK")
+end
+
 -- Already-current data must pass through the chain without being altered or re-defaulted.
 do
     local current = PlayerDataSchema.newDefault()
