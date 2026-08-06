@@ -6,7 +6,7 @@ Read this first, every session. This document is the mission briefing for any or
 
 Roblox hybrid of *Dave the Diver* / *RuneScape* / *Fisch* / restaurant sim. Fish the open seas, process the catch, run a sushi restaurant. The supply chain IS the game — every fish becomes gold only through a served plate.
 
-- **Design source of truth:** `docs/PRD.md` — a mirror. Canonical copy lives in the MIMIR vault at `Projects/Sushi Sea/PRD.md`. Never edit the mirror; run `scripts/sync-prd.sh` (needs the vault cloned beside this repo, or `MIMIR_VAULT` set) after any vault-side PRD change, and `scripts/sync-prd.sh --check` at session start to catch drift
+- **Design source of truth:** `docs/PRD.md` — canonical, and it lives here. No vault copy, no sync step, no drift to check (separated 2026-07-29). Edit it on a branch like anything else; Locked sections (§1–§5, §7–§11) still need Giahy's sign-off, and Open Threads (§12) are never resolved unilaterally
 - **Build order:** PRD §6 modules M0–M20, sequential with explicit deps. Live status: `TASKS.md`
 - **Owner:** Giahy. He resolves Open Threads, gates `dev`→`main`, publishes to Roblox, and does Blender/Figma work.
 
@@ -14,7 +14,7 @@ Roblox hybrid of *Dave the Diver* / *RuneScape* / *Fisch* / restaurant sim. Fish
 
 | Topic | Decision |
 |---|---|
-| Repo | This dedicated repo. Vault keeps design docs; code + agents + process live here |
+| Repo | This dedicated repo owns everything — design, code, agents, process. The MIMIR vault holds no Sushi Sea material (separated 2026-07-29; it previously kept the canonical PRD and the repo mirrored it) |
 | Sequencing | PRD §6 honored. No economy/mechanics code before its module gate. M0 (cook verb) blocks the vertical slice — Giahy decision only |
 | Orchestrator | **Sonnet** starts and resumes every session |
 | Workers | 3 dev + 2 review agents on **Sonnet**; downgrade a task to **Haiku** only if single-file, fully specified, mechanically checkable |
@@ -84,12 +84,11 @@ Base personalities from [msitarzewski/agency-agents](https://github.com/msitarze
 - [x] Create the `dev` branch — done 2026-07-28, seeded at the migration commit. `main` stays at the initial commit until Giahy merges at a module boundary
 - [ ] Protect `main` on GitHub (Settings → Branches): require PR, no direct pushes
 - [ ] Optional: require 2 approvals on PRs into `dev` (agents approve via review; server-side enforcement is belt-and-suspenders)
-- [ ] Configure the **Default** cloud environment at claude.ai/code (cloud icon above the message box → hover Default → settings gear). One environment, not a Sushi-Sea-specific one: the vault needs mem0 on identical terms, and a second environment is one more thing to remember to select. Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
+- [ ] Configure the **Default** cloud environment at claude.ai/code (cloud icon above the message box → hover Default → settings gear). One environment, not a Sushi-Sea-specific one: a second environment is one more thing to remember to select, and forgetting fails silently. Environments carry network access, env vars, and a setup script — they do *not* pin repos; a session reaches any repo the connected GitHub account can see
   - **Network access → Custom**, add `mcp.mem0.ai`, tick *also include the default list*. Verified 2026-07-28: under Trusted that host fails the CONNECT tunnel with a proxy 403 while `api.github.com` and `registry.npmjs.org` return 200 — mem0 is an HTTP MCP server dialing out over the session network
   - **Environment variables** → `MEM0_API_KEY=...`. No secrets store exists; env vars are readable by anyone using the environment, so keep the key scoped
   - Install the mem0 plugin: `/plugin marketplace add mem0ai/mem0` then `/plugin install mem0@mem0-plugins` (**new step, 2026-07-28** — mem0 is no longer wired via `sushi-sea/.mcp.json`, that entry was removed; it's now an account/environment-level plugin install, same as the vault would use)
   - All three are required. Missing any one leaves the mem0 tools absent with no error pointing at the cause
 - [ ] Verify in a **new** session — running sessions copy env vars once at startup and never re-read them. Confirm the mem0 tools are present (`/mem0:health`) before trusting any agent's "saved to memory". Note: cross-session write/read was confirmed working locally on 2026-07-28 via the plugin — this checkbox is specifically about confirming it *in the actual cloud environment*, which is untested
-- [ ] Pull the MIMIR vault into a session alongside this repo whenever the PRD needs syncing — `scripts/sync-prd.sh` expects it as a sibling directory, or `MIMIR_VAULT` pointed at it
 - [ ] Figma workspace for UI design (needed by M6/M18, not now)
 - [ ] Roblox Creator Hub remains yours — publishing is always a Giahy action

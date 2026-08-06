@@ -2,10 +2,9 @@
 
 Resolution of PRD Open Thread #1. Locked by Giahy in a grill-me session, 2026-07-29.
 
-This document is the **spec**; the PRD is the source of truth. The `docs/PRD.md` mirror is
-deliberately untouched — the canonical edits this session requires are listed in
-[§9 PRD edits pending](#9-prd-edits-pending-vault-side) and must be applied in the MIMIR vault at
-`Projects/Sushi Sea/PRD.md`, then pulled back with `scripts/sync-prd.sh`.
+This document is the **spec**; `docs/PRD.md` is the source of truth. The PRD edits this lock
+required were applied on 2026-07-29 — see [§9](#9-prd-edits-applied). Where the two disagree, the
+PRD wins and this document is the bug.
 
 ---
 
@@ -255,9 +254,10 @@ weakens the case for pulling the post-launch attribute-mixing relief valve forwa
 
 ---
 
-## 9. PRD edits pending (vault-side)
+## 9. PRD edits applied
 
-Apply in the MIMIR vault at `Projects/Sushi Sea/PRD.md`, then run `scripts/sync-prd.sh`.
+All applied to `docs/PRD.md` on 2026-07-29, in the same change that made the PRD canonical in this
+repo. Listed here as the record of what this lock changed.
 
 1. **§4 — Onboarding & the boat→restaurant transition.** Define the cook verb per §2 above.
 2. **§4 — Staff.** Add rarity tiers; state that staff quality is tier-capped and may equal or

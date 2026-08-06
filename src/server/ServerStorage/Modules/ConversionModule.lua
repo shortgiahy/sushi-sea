@@ -1,4 +1,4 @@
--- ConversionModule: cook(fish) -> plate, the ONE conversion implementation; boat verb and staff AI both call this,
+-- ConversionModule: cook(fish, performance) -> portions, the ONE conversion implementation; boat verb and staff AI both call this,
 -- never duplicate it (PRD §7.6)
 --
 -- M4 scope: yield + grade resolution per the locked cook verb (docs/design/cook-verb.md §4.2,

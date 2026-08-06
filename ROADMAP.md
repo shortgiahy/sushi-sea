@@ -10,7 +10,7 @@ Execution plan for the agent team. Expands PRD §6 into phases, waves, assignmen
 
 | Phase | Modules | Theme | Exit gate |
 |---|---|---|---|
-| 0 | M0 | Cook & serve verb design 🔶 | Verbs locked in PRD §4 |
+| 0 ✅ | M0 | Cook & serve verb design 🔶 | ~~Verbs locked in PRD §4~~ — done 2026-07-29 |
 | 1 | M1–M2 | Foundation: toolchain + data | CI green; player data round-trips |
 | 2 | M3–M6 | **Vertical slice** (gray-box) | Blind playtester enjoys cast→cook→serve→gold |
 | 3 | M7–M9 | Economy & the 24–48h dial 🔶 | Numbers model approved; offline bank correct |
@@ -22,12 +22,11 @@ Phases are sequential. Waves *inside* a phase run in parallel where deps allow.
 
 ---
 
-## Phase 0 — Verb lock (design only) 🔶
+## ~~Phase 0 — Verb lock~~ ✅ CLOSED 2026-07-29
 
-**M0 — Cook & serve verb** · blocks everything playable
-- Owner: Giahy decision via grill-me. `dev-experience` prepares the brief first.
-- Prep task (`claude/sushi-m0-verb-brief`): one doc — the four shelf options (timing bar / filleting minigame / slicing swipe / hold-button) + any new candidates; each scored on: mobile feel, skill expression, 100×/session repetition tolerance, omakase-ceiling extensibility (couples to Thread #6), implementation cost. End with ONE recommendation and the matching serve-verb proposal.
-- Exit: Giahy locks both verbs → PRD §4 updated, Thread #1 checked off, M3/M4 unblocked.
+**M0 — Cook & serve verb** · locked by Giahy in a grill-me session.
+
+Two-stage cook at a camera-locked board (trace→yield, stroke→grade, orthogonal outputs); serve is pure delivery. The timing-bar option from the original shelf was ruled out — one gesture producing both outputs makes failure undiagnosable. Spec: `docs/design/cook-verb.md`. PRD §4/§5/§6/§7.6/§12 updated 2026-07-29; Thread #1 closed. M3/M4 unblocked.
 
 ## Phase 1 — Foundation
 
@@ -59,7 +58,7 @@ Phases are sequential. Waves *inside* a phase run in parallel where deps allow.
 
 | Task | Agent | Branch | Notes |
 |---|---|---|---|
-| M4 conversion core + cook verb | dev-gameplay | `claude/sushi-m4-cook` | `ConversionModule.cook(fish)→plate` (canonical, §7.6) + `BoatCookController` driving the locked M0 verb |
+| M4 conversion core + cook verb | dev-gameplay | `claude/sushi-m4-cook` | `ConversionModule.cook(fish, performance)→portions` (canonical, §7.6) + `BoatCookController` driving both stages of the locked M0 verb — camera-locked board, trace→yield, stroke→grade, `prepTier` honored, result readout against the ceiling |
 | M5 serve verb + economy faucet | dev-systems | `claude/sushi-m5-economy` | `EconomyService` plate resolution, all 4 multipliers server-side, clamps at resolution; `FishTable` ~10 authored species; boat serve verb. Headless tests on the formula + clamps |
 | M6 spoilage + slice UI | dev-systems (tick) + dev-experience (UI) | `claude/sushi-m6-spoilage`, `claude/sushi-m6-ui` | Basic freshness tick; `FreshnessUI` + gold display |
 
@@ -89,7 +88,7 @@ Phases are sequential. Waves *inside* a phase run in parallel where deps allow.
 | M14 legendary encounter 🔶 | dev-gameplay | `claude/sushi-m14-legendary` | Multi-phase reel scaled from M3 numbers (Thread #4 — Giahy locks phase structure first); no buy-in, no loss, per-connection only |
 | M15 dry-aging locker | dev-systems | `claude/sushi-m15-aging` | Aging track separate from spoilage; slot management; cash-out timer; clamped mutation roll |
 | M16 trophies + gifting | dev-gameplay | `claude/sushi-m16-gifting` | Decay-free mounts; rare-fish gifting; Cooking-gated butchering; no cheap-liquidation path |
-| M17 omakase counter | dev-gameplay + dev-experience | `claude/sushi-m17-omakase` | Player counter lifts staff ceiling + boss aura; couples to M0 verb 🔶 |
+| M17 presence aura | dev-gameplay + dev-experience | `claude/sushi-m17-aura` | Player presence multiplies staff `performance` (quality + speed). Shaped to reward visiting, not parking — session decay or per-shift cap. *(Scope reduced 2026-07-29: omakase counter dropped as a separate product.)* Magnitude still 🔶 |
 | M18 art pipeline | dev-experience specs; **Giahy/artist models** | `claude/sushi-m18-art` | `Asset Pipeline.md` manifest + bpy scripts; Blender→FBX→Studio contract (≤10k tris, ≤4 maps, origin pivot, stud scale); replace gray-box. Figma for UI art direction |
 
 ## Phase 6 — Launch
