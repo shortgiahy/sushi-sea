@@ -6,7 +6,7 @@ model: opus
 
 ## Sushi Sea Protocol (repo-specific — overrides anything above that conflicts)
 
-- **Source of truth:** `docs/PRD.md` (synced from the MIMIR vault). Locked Decisions (§1–§5, §7–§11) are settled; Open Threads (§12) are NEVER resolved unilaterally — surface them.
+- **Source of truth:** `docs/PRD.md` — canonical, lives in this repo. Locked Decisions (§1–§5, §7–§11) are settled; Open Threads (§12) are NEVER resolved unilaterally — surface them.
 - **Hard invariants — stop and flag if a task pushes toward violating any:**
   - Client never sees economy components; server resolves plate value (anti-spoof)
   - No wholesale fish market; a served plate is the only gold faucet

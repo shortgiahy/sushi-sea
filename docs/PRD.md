@@ -30,7 +30,7 @@ Five principles that resolve most new questions. If a principle resolves a quest
 
 1. **Risk is always available, never forced, always trades for acceleration — and means opportunity cost, not punishment.** Storm zones, the aging locker, the tutorial loan, and legendary hunts all express this. Failure forfeits a *gain you could have had*, never destroys something you own. A botched legendary costs nothing but the moment; an over-aged fish doesn't ruin — it sits there not making money. *You missed out* beats *you lost everything*. Every new risk surface must obey this.
 2. **The supply chain is the only path to gold.** No wholesale market, ever. Both halves stay load-bearing by construction.
-3. **Perform every system manually once before it can be automated or expanded.** Manual cast before bite depth. Manual cook and serve on the boat before hiring cooks and servers. Manual sale before staff. Manual cook before the omakase ceiling. This is a literal code path (§7.6), not a philosophy.
+3. **Perform every system manually once before it can be automated or expanded.** Manual cast before bite depth. Manual cook and serve on the boat before hiring cooks and servers. Manual sale before staff. Manual cook before the presence aura lifts staff output. This is a literal code path (§7.6), not a philosophy.
 4. **Author the bands, clamp the multipliers.** Large values are hand-authored lookups. Formula modifiers are clamped. Nothing large emerges from a chain of multiplications.
 5. **Experimentation lives in risk management** (the dry-aging cash-out decision), not combinatorics (recipe mixing).
 
@@ -78,6 +78,10 @@ Player freely toggles between sea and restaurant. NPC staff run the restaurant l
 ### The leash: perishability
 Raw fish decays on a freshness timer. Forces restocking, blocks hoard-and-coast, acts as a gold sink, and is **the dial tuned to hit the 24–48h return target**. Fresh serves at full value; stale is penalized; spoiled is tossed. Spoilage runs while offline.
 
+**The portion clock.** Cutting resets the clock — a portion does not inherit its fish's `caughtAt`, it starts its own timer at the cut. `portion_lifetime = grade_lifetime[grade] × fish_freshness_at_cut`. Clocks are per-portion and independent; portion *count* does not affect lifetime. Higher grades run out faster (`otoro < chutoro < akami`), aiming anti-hoard pressure at premium stock. Scaling by the parent fish's freshness *at the moment of the cut* is what closes the laundering loophole — without it a player holds fish to near-spoiled, cuts to refresh, and spoilage stops leashing anyone who notices.
+
+**Expiry downgrades, it does not destroy.** Otoro → chutoro → akami → spoiled (tossed). **Only the base grade can be destroyed.** Grade-accelerated destruction would put a total-loss state directly on top of the skill reward, violating Pillar 1, and would make *deliberately cutting worse* correct play — any rule that rewards sandbagging the verb will be found. Anti-hoard intent survives intact: bank a vault of otoro, wake to a vault of akami. The loss is real and scales with grade.
+
 ### Scoreboard and social
 - **Restaurant prestige** (public Yelp app) and the **collection dex** are the public flex.
 - **Skills** live on a private LinkedIn-style resume app, later doubling as the **staff-hiring screen**.
@@ -101,20 +105,34 @@ Fishing level gates *outcome*, not *location*. Anyone can sail into a storm; und
 - **Independent stream per restaurant** (no finite shared pool). Volume driven by the hidden traffic stat.
 - **Six-stage lifecycle:** arrival/seating → ordering → fulfillment → serving/eating → payment → rating.
 - **Difficulty distribution:** kitchen throughput is the primary bottleneck (skill expression); stock is secondary (supply-chain pressure); seating is a buy-past soft cap.
-- **Staff run the standard menu to a ceiling; the player, when present, runs an omakase counter** that lifts the ceiling, plus a modest boss-aura speed bonus to nearby staff.
+- **Staff run the standard menu; the player's presence applies a quality (and speed) aura to nearby staff.** There is no separate omakase product — no premium seating, no customer variant, no player-run counter minigame. The aura multiplies staff `performance`, so presence raises plate quality and therefore profit.
+- **Aura hazard to solve at M17:** presence-boosts-quality creates an incentive to *idle* in the restaurant, competing with fishing — the other half of the game. The aura needs a shape that rewards **visiting rather than parking** (diminishing over a session, or a per-shift cap).
 
 ### Rating
 Single prestige number that accumulates toward 5 stars, **never drops**, public. A recoverable popularity layer is shelved as a known expansion. In-the-moment stakes lean on gold lost to walkouts.
 
 ### Onboarding & the boat → restaurant transition
 - **The dinky sailboat is the first restaurant:** fish at the stern, cook midship, sell at the bow — the whole loop in one camera frame.
-- **On the boat, cooking and serving are MANUAL player verbs.**
+- **On the boat, cooking and serving are MANUAL player verbs.** Locked 2026-07-29 (Open Thread #1; full spec in `docs/design/cook-verb.md`):
+  - **Cooking is a two-stage verb at a camera-locked 3D cutting board, midship.** Stage one, *butchery*: drag along the fish's anatomical cut seam. Deviation is meat left on the bone, so accuracy is continuous and produces **yield** (portion count). One pass per fish, committed on release, **no retry** — a restartable cut is savescummed to perfection and makes the skill curve decorative. Stage two, *slicing*: one decisive stroke per loin, reading angle, straightness, and speed consistency, producing **grade** (otoro / chutoro / akami). One grade per loin, so a multi-loin fish yields a grade *distribution* with nothing rolled.
+  - **The two outputs are orthogonal** — the trace does not influence grade, the stroke does not influence yield. Two legible lessons rather than correlated noise.
+  - **Performance is pure hand skill.** Cooking *level* does not touch the difficulty of either stage; it raises the worst-case floor and multiplies plate value via `cooking_extraction`. **Level buys consistency; hands buy peak.**
+  - **Authored `prepTier` per species** scales ceremony to stakes: *quick* (small/common) is a single short trace at base grade with no stage two, ~2s; *full* (large/rare/legendary) is the complete two-stage verb, ~8–12s. Times are M4 targets, not locked numbers. Large-creature butchering is the same verb with longer, curvier, multi-segment geometry — no new mechanic for legendaries.
+  - **Result readout only, no live cue during the stroke.** After each fish: the player's path against the ideal, portions produced against the ceiling that was available ("4 of 6"), and the grades that came off. The against-the-ceiling comparison is load-bearing — without a visible ceiling a player cannot tell a good cut on a small fish from a bad cut on a big one, and the verb reads as random. Yield counts and grade labels are not plate-value components, so the client may see them; the server still resolves value alone.
+  - **Serving is pure delivery.** Walk the plate over and hand it off. No order matching, no grade requirements, no plating minigame.
+  - **Cooking is free-choice, any time** — not interleaved-on-catch, not a gated prep phase. Because `freshness_polish` reads the portion clock, cutting early shortens the sale window, so timing is a real choice: cut when you intend to serve.
+  - **Watch item:** quick-tier fish cannot produce premium grades, so early players see less of the grade system than late players. Verify at the M6 slice gate.
 - **Brick-and-mortar is the earned upgrade** and the moment staff and autonomy unlock — hire cooks and servers (headcount) who perform cooking and serving automatically.
 - **Tutorial:** scripted tutorial wraps the boat loop; rails come off after the loop closes once.
 - **Starter loan** clears in a session or two — a narrative on-ramp, not a late-game pillar.
 
 ### Staff
-An **upgrade line — headcount, nothing more complex.** Browse NPC applicants on the resume/LinkedIn app and recruit. **Each staff member's Hospitality/Cooking skill levels up the longer you keep them.** Wages scale with headcount.
+An **upgrade line — headcount, nothing more complex.** Browse NPC applicants on the resume/LinkedIn app and recruit. **Each staff member's Hospitality/Cooking skill levels up the longer you keep them** — their accuracy scalar rises with tenure, so retention is an economic decision. Wages scale with headcount.
+
+- **Applicants carry rarity tiers.** Staff cooking quality is **capped by tier, not by the player** — a common cook is solid, a rare chef matches a good player, a legendary chef beats most players. Hiring well is a reward, never a downgrade in plate quality.
+- **High floors — staff do not botch.** Their accuracy band is narrow and sits near their tier ceiling.
+- **Deterministic, no per-fish roll.** Required, not preferred: §7.4's offline bank is closed-form and must not replay the restaurant tick-by-tick. Deterministic accuracy → deterministic yield and grade → the bank stays arithmetic.
+- **The player is never punished for being absent.** A well-staffed kitchen runs at full quality. Manual cooking stays available at all times and stays worthwhile until the player's staff outgrow their hands — a crossover that happens organically per-player rather than on a scripted rail.
 
 ### Marketing
 Not a player action. A **hidden traffic stat** computed from **Yelp prestige + cosmetics + Hospitality**. Do not build a marketing minigame.
@@ -152,17 +170,31 @@ Farming skill · popularity layer (recoverable traffic under the prestige rating
 **One faucet: a served dish.** Enforced at `EconomyService`, server-side only.
 
 ```
-served_plate_value = species_base × cooking_extraction × freshness_polish × dry_age_mutation
+served_plate_value = cut_base[species][grade] × cooking_extraction × freshness_polish × dry_age_mutation
 ```
 
 | Term | Source | Clamp |
 |------|--------|-------|
-| `species_base` | `FishTable.lua` authored lookup, per species (~5–10 common, scaling with rarity) | none — it IS the large term |
+| `cut_base[species][grade]` | `FishTable.lua` authored two-index lookup — species × grade (otoro / chutoro / akami). ~10 species × 3 grades ≈ 30 rows at M5 | none — it IS the large term |
 | `cooking_extraction` | `cookingLevel / MAX_LEVEL` — novice + legendary = mediocre plate | `[0, 1]` |
-| `freshness_polish` | linear from `caughtAt` timestamp | `[0.5, 1.5]` |
+| `freshness_polish` | linear from the **portion's own clock** (starts at the cut, not `caughtAt`) | `[0.5, 1.5]` |
 | `dry_age_mutation` | rare roll on locker pull | `[1.0, ~2.5]` — never orders of magnitude |
 
+The base term widened from `species_base` to a two-index lookup when the cook verb locked (2026-07-29). **No new multiplier** — the formula's shape is unchanged and Pillar 4 is untouched.
+
 **All four multipliers apply server-side only.** The client receives the final resolved value for display, never the components. This is the anti-spoof invariant — do not break it for convenience.
+
+**Yield is a separate, non-value channel.** How many portions a fish produces does not enter `served_plate_value`; it multiplies how many plates exist to sell.
+
+```
+yield = round(maxYield[species] × lerp(floorFrac(cookingLevel), 1.0, traceAccuracy))
+```
+
+- `maxYield[species]` — authored, **level-independent**. The ceiling never moves.
+- `floorFrac` — lerps from ~0.4 at level 1 to ~0.85 at max level.
+- **Never zero.** A botched cut returns a fraction of species max, not a flat minimum, so a badly-butchered legendary still beats a perfect sardine and the rarity ladder survives. A botched *stroke* floors at akami; there is no grade below it and no "inedible" result.
+
+This is **bounded convergence, not compounding** — levelling raises the bad day toward the good day and never raises the good day. Cooking level therefore reaches income twice, via `cooking_extraction` and via consistency, but the second channel is capped by `maxYield`.
 
 **Sink stack:**
 - **Ingredients per plate** — mandatory, scales with volume
@@ -187,8 +219,8 @@ Each module is one independently buildable + verifiable unit. Build in order; do
 | M1 | **Repo + toolchain skeleton** | §13 Q1 | Rojo project, Rokit-pinned selene/stylua/wally, CI, empty service files per §7.1. `rojo build` opens in Studio; CI green. |
 | M2 | **Player data backbone** | M1 | `PlayerDataService` w/ versioned schema (§7.3), pcall/retry, migration chain. Player joins → data loads/saves without error. |
 | M3 ⚡ | **Fishing feel slice** *(gray-box)* | M0, M2 | `FishingController` cast→hook→reel + server-side catch validation. **Feel gate:** blind playtester finds the rod alone satisfying. Placeholder numbers. |
-| M4 ⚡ | **Conversion core + cook verb** | M0, M3 | `ConversionModule.cook(fish)→plate` (canonical, §7.6); `BoatCookController` drives it. Manual cook works on the boat. |
-| M5 ⚡ | **Serve verb + economy faucet** | M4 | Boat serve verb; `EconomyService` plate resolution wired to `FishTable` (~10 authored species); all 4 multipliers server-side. |
+| M4 ⚡ | **Conversion core + cook verb** | M0, M3 | `ConversionModule.cook(fish, performance)→portions` (canonical, §7.6) with the `performance` interface in place; `BoatCookController` drives both stages — camera-locked board, trace→yield, stroke→grade, `prepTier` honored, result readout against the ceiling. Manual cook works on the boat. |
+| M5 ⚡ | **Serve verb + economy faucet** | M4 | Boat serve verb (pure delivery, no order matching); `EconomyService` plate resolution wired to a **graded** `FishTable` — `cut_base[species][grade]`, ~10 species × 3 grades; all 4 multipliers server-side. |
 | M6 ⚡ | **Basic spoilage + slice UI** | M5 | `SpoilageService` basic freshness tick; `FreshnessUI` + gold UI. **Slice gate:** blind playtester finds cast→cook→serve→gold satisfying with gray-box. |
 | M7 | **Economy tuning model** *(numbers)* | M6 | Open Threads #3+#5 jointly. 5-row faucets−sinks table; net income/hr grows slower than next-tier cost; throughput cliff ≈ week 6. |
 | M8 | **Spoilage + storage tiers** | M7 | Real decay rates; storage tier ladder (capacity + spoilage slowdown). Coast lengths per tier match the 24–48h dial. |
@@ -200,7 +232,7 @@ Each module is one independently buildable + verifiable unit. Build in order; do
 | M14 | **Legendary encounter** | M3, M13 | Multi-phase reel scaling (Open Thread #4 — needs M3 base numbers); Fishing-gated outcome; no buy-in/loss penalty; per-connection only. |
 | M15 | **Dry-aging locker** | M8 | `DryAgingLocker` aging track (separate from spoilage), slot management, cash-out timer, rare mutation roll. Real pull-or-wait decision. |
 | M16 | **Trophy mounts + gifting** | M14 | Decay-free mounts; rare-fish gifting; Cooking-gated legendary butchering; no cheap liquidation path. |
-| M17 | **Omakase counter** | M11, M0 | Player-run counter lifts the staff menu ceiling + boss-aura speed bonus (Open Thread #6; couples to #1). |
+| M17 | **Presence aura** | M11, M0 | Player presence applies a quality (and speed) multiplier to nearby staff `performance`. Shaped to reward visiting rather than parking — diminishing over a session or a per-shift cap. *(Scope reduced 2026-07-29: the omakase counter is dropped as a separate product.)* |
 | M18 | **Art pipeline** | M6 | `Asset Pipeline.md` manifest + `bpy` scripts; Blender→FBX→Studio contract (≤10k tris, ≤4 maps, origin pivot, stud scale). Gray-box replaced. |
 | M19 | **Monetization** | M12 | `PassManager` (GamePass cache + prompt); cosmetics + convenience only. No pay-to-win. |
 | M20 | **Polish + launch prep** | M16, M17, M18, M19 | Walkout rules, storm catalog, remaining #6 undefineds, full playtest, `Studio Setup.md` runbook, publish handoff. Reality-check sign-off. |
@@ -233,7 +265,7 @@ ServerScriptService/
 ServerStorage/
   Modules/
     FishTable.lua                   -- AUTHORED lookup: {species -> base_price}. No computed values.
-    ConversionModule.lua            -- cook(fish) -> plate; the ONE conversion implementation
+    ConversionModule.lua            -- cook(fish, performance) -> portions; the ONE conversion implementation
     OfflineBankCalculator.lua       -- snapshot-in / snapshot-out math, net of wages and spoilage
     DryAgingLocker.lua              -- aging track: separate from spoilage, slot management
     PassManager.lua                 -- GamePass ownership cache + purchase prompt
@@ -341,13 +373,20 @@ On logout: save `offlineSnapshotAt = os.time()` and `offlineStockCount = #invent
 ### 7.6 Manual-then-automate code path
 
 ```
-[ConversionModule] cook(fish) -> plate
-        ↑                           ↑
- player input                  staff AI
- (BoatCookController)          (StaffService)
+[ConversionModule] cook(fish, performance) -> portions
+        ↑                                        ↑
+ player input                               staff AI
+ (BoatCookController)                    (StaffService)
+
+performance = {
+    traceAccuracy = number,      -- [0, 1]
+    strokeQuality = {number},    -- [0, 1] per loin; empty for quick-tier
+}
 ```
 
 `ConversionModule` in `ServerStorage/Modules/` is the canonical implementation. The boat verb and restaurant staff both call it. **Build the conversion once; swap the driver. Do not duplicate the logic.**
+
+The `performance` table is the seam that makes the swap literal: `BoatCookController` fills it from real input, `StaffService` synthesizes it from the staff member's rarity tier and tenure. Neither driver contains conversion logic, and the cook verb can be re-locked later without touching `ConversionModule`.
 
 ### 7.7 Catch resolution
 Client-authoritative-feeling but server-validated: per-player rolls must feel instant; validate server-side to prevent spoofed legendary hooks. Weather state is server-authoritative and broadcast. The skill-gate needs no networking logic — no kill-steal/tag/loot-priority systems.
@@ -455,7 +494,7 @@ Git workflow (branches, merge approval, retries, MCP tools) is governed by the r
 
 ## 10. Repository layout
 
-**Decided (grill-me 2026-07-05): (B) dedicated repo — `shortgiahy/sushi-sea`.** Code, agents, and process docs (`HANDOFF.md`, `TASKS.md`, `BUILD_LOG.md`) live there; this vault keeps design docs, with `docs/PRD.md` in the repo synced from here. Layout inside the repo:
+**Decided (grill-me 2026-07-05): (B) dedicated repo — `shortgiahy/sushi-sea`.** Extended 2026-07-29: the repo owns **everything**, design included. This document is canonical here; the MIMIR vault holds no Sushi Sea material. The earlier split — vault-canonical PRD, repo mirror, `sync-prd.sh` — is retired: it drifted twice in three weeks and left the M0 lock stranded outside the PRD for a session. Layout:
 
 ```
 sushi-sea/
@@ -470,6 +509,11 @@ sushi-sea/
     gui/                        # → StarterGui
   tests/                        # headless unit tests (economy, offline bank, spoilage)
   .github/workflows/ci.yml      # selene + stylua --check + tests
+  docs/PRD.md                   # this document — canonical
+  docs/design/                  # locked-decision specs (cook verb, economy skeleton)
+  docs/runbooks/                # Giahy-action runbooks (Studio MCP, publish)
+  HANDOFF.md TASKS.md BUILD_LOG.md ROADMAP.md
+  .claude/agents/               # the six-agent team
 ```
 
 ---
@@ -501,11 +545,13 @@ Team model (grill-me 2026-07-05; agents live in the game repo's `.claude/agents/
 
 ## 12. Open Threads — resolution order; do not invent resolutions
 
-### #1 The cook verb ⚡ HIGHEST PRIORITY — blocks vertical slice
-**What the player physically does when cooking on the boat is undefined.** Options on the shelf (not yet evaluated): timing bar · filleting/portioning minigame · slicing swipe · simple hold-button. Same question applies to the **boat serving verb** (lower stakes, same session). Blocks everything playable, plus Omakase counter design (#6). Open every new design session here unless Giahy redirects.
+### ~~#1 The cook verb~~ — RESOLVED 2026-07-29
+Two-stage verb (trace→yield, stroke→grade) at a camera-locked board; serving is pure delivery. Locked by Giahy; specified in §4 (Onboarding) and §5, full spec in `docs/design/cook-verb.md`. **Still open inside it:** what verb-execution skill should *reward* beyond yield and grade — §5's plate-value formula has no slot for it. Deferred deliberately; revisit only when a specific module needs it.
 
 ### #2 Menu variety / nigiri depth
 Single-fish nigiri is the only dish; attribute-mixing cut; dry-aging opt-in and slot-limited. **Is species-as-variety enough to hold an 18+ audience over weeks?** Relief valves on the shelf: scored-attribute mixing (post-launch), farming line (post-launch). Pulling either forward is a real scope decision — interrogate before committing to nigiri-only at launch.
+
+**Partially relieved by the #1 resolution (2026-07-29):** grades (otoro / chutoro / akami) add a per-portion quality axis on top of species, so a single species now spans three price points and the player's hands decide which. This is real depth that did not exist when the thread opened. It is *not* a full answer — grade is execution variance, not menu variety — but it lowers the pressure to pull a relief valve forward. Re-judge at the M6 slice gate.
 
 ### #3 First-pass economy model
 Build the 5-row faucets-minus-sinks table — rows: tutorial boat, new restaurant, mid, late, whale; columns: avg plate value, plates/hr, headcount, wages/hr, spoilage/hr, net income/hr, time to next tier. **Single output to read:** does net income/hr grow faster than next-tier cost? **Dial to find:** where the throughput cliff lands (healthy ≈ week 6). Tune with spoilage rate + next-tier pricing; wages are weak. Run as a dedicated numbers session.
@@ -520,7 +566,7 @@ Stance resolved (freshness-governed; storage raises capacity and slows spoilage)
 - **Purchasing tiers:** boats, rods, equipment, storage, restaurant tiers — ladder, costs, unlocks
 - **Yelp prestige formula:** how shifts accumulate toward 5 stars; what counts as a "bad shift"
 - **Hidden traffic stat formula:** exact weighting of Yelp + cosmetics + Hospitality into spawn volume
-- **Omakase counter mechanics:** what the player does to lift the ceiling; boss-aura bonus size. Couples to #1
+- ~~**Omakase counter mechanics**~~ — resolved 2026-07-29 with #1: dropped as a separate product; replaced by the presence aura (quality + speed multiplier on staff `performance`). Still unset: the aura's **magnitude** and its anti-parking shape (session decay or per-shift cap) — M17
 - **Walkout rules:** wait time, gold lost, tie-in to the (shelved) popularity layer's eventual hook
 - **Storm catalog:** weather types → legendaries, durations, zone sizes, broadcast lead time
 

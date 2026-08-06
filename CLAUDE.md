@@ -5,7 +5,7 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Su
 - **Read order, every session:** `HANDOFF.md` → `ROADMAP.md` (current phase) → `TASKS.md` → tail of `BUILD_LOG.md`. Then search mem0 (`user_id: giahy`).
 - **Design source of truth:** `docs/PRD.md`. Locked Decisions are settled; Open Threads (§12) are never resolved unilaterally — surface to Giahy.
 - **Architecture:** PRD §7 exactly. **Code standards:** PRD §8 exactly (why-comments only; reasoning goes in commits/PRs/BUILD_LOG).
-- **`docs/PRD.md` is a mirror, never edit it here.** Canonical copy is the MIMIR vault at `Projects/Sushi Sea/PRD.md`. PRD changes are Giahy design sessions in the vault; pull them in with `scripts/sync-prd.sh` (`--check` to detect drift).
+- **`docs/PRD.md` is canonical and lives here.** There is no vault copy and no sync step (separated 2026-07-29). PRD changes are Giahy design sessions, edited directly in this repo on a branch like any other change. Locked sections still need his sign-off — agents propose, Giahy locks.
 
 ## Memory (mem0)
 
