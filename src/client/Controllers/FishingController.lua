@@ -25,6 +25,7 @@ type ControllerState = {
     tension: number,
     isHolding: boolean,
     lastSentAt: number,
+    biteAt: number?,
 }
 
 local state: ControllerState = {
@@ -33,16 +34,35 @@ local state: ControllerState = {
     tension = 0,
     isHolding = false,
     lastSentAt = 0,
+    biteAt = nil,
 }
 
 local bobber: BasePart? = nil
 local promptLabel: TextLabel? = nil
 local tensionFill: Frame? = nil
 local progressFill: Frame? = nil
+local targetZone: Frame? = nil
 
 local IN_BAND_COLOR = Color3.fromRGB(80, 200, 120)
 local OUT_OF_BAND_COLOR = Color3.fromRGB(230, 200, 60)
 local SNAP_RISK_COLOR = Color3.fromRGB(220, 70, 70)
+
+-- Duplicates FishingCatch.targetCenterAt exactly (server-authoritative version lives there).
+-- FishingController can't require it directly — FishingCatch.lua lives in ServerStorage, which
+-- doesn't replicate to clients — so this is a small, deliberate duplication rather than inventing
+-- a new client/server module-sharing mechanism for one function. If the motion formula changes,
+-- update both; there is no anti-spoof concern in them drifting slightly out of sync (worst case is
+-- a briefly-misleading render, never an economy/inventory effect — the server's copy is what
+-- actually resolves the catch).
+local function _targetCenterAt(elapsedSeconds: number): number
+    local raw = FishingConfig.TARGET_CENTER
+        + FishingConfig.TARGET_MOTION_AMPLITUDE_1 * math.sin(elapsedSeconds * FishingConfig.TARGET_MOTION_FREQUENCY_1)
+        + FishingConfig.TARGET_MOTION_AMPLITUDE_2
+            * math.sin(elapsedSeconds * FishingConfig.TARGET_MOTION_FREQUENCY_2 + FishingConfig.TARGET_MOTION_PHASE_2)
+
+    local halfWidth = FishingConfig.TARGET_WIDTH / 2
+    return math.clamp(raw, halfWidth, 1 - halfWidth)
+end
 
 local function _buildGui(): ()
     local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -82,15 +102,17 @@ local function _buildGui(): ()
     tensionBack.Visible = false
     tensionBack.Parent = root
 
-    -- Target-zone highlight: a static strip showing TENSION_TARGET_MIN..MAX, drawn once since the
-    -- band itself doesn't move during a fight (only the fill on top of it does).
-    local targetZone = Instance.new("Frame")
-    targetZone.Name = "TargetZone"
-    targetZone.BackgroundColor3 = Color3.fromRGB(60, 100, 60)
-    targetZone.BorderSizePixel = 0
-    targetZone.Position = UDim2.fromScale(FishingConfig.TENSION_TARGET_MIN, 0)
-    targetZone.Size = UDim2.fromScale(FishingConfig.TENSION_TARGET_MAX - FishingConfig.TENSION_TARGET_MIN, 1)
-    targetZone.Parent = tensionBack
+    -- Target-zone highlight: repositioned every frame in _onHeartbeat (2026-08-06: the zone now
+    -- moves, Stardew Valley-style — see _targetCenterAt above). Initial Position/Size here are
+    -- just a starting placeholder before the first fight ever begins.
+    local tZone = Instance.new("Frame")
+    tZone.Name = "TargetZone"
+    tZone.BackgroundColor3 = Color3.fromRGB(60, 100, 60)
+    tZone.BorderSizePixel = 0
+    tZone.AnchorPoint = Vector2.new(0.5, 0)
+    tZone.Position = UDim2.fromScale(FishingConfig.TARGET_CENTER, 0)
+    tZone.Size = UDim2.fromScale(FishingConfig.TARGET_WIDTH, 1)
+    tZone.Parent = tensionBack
 
     local tFill = Instance.new("Frame")
     tFill.Name = "Fill"
@@ -121,6 +143,7 @@ local function _buildGui(): ()
     promptLabel = prompt
     tensionFill = tFill
     progressFill = pFill
+    targetZone = tZone
 end
 
 local function _setPrompt(text: string): ()
@@ -235,6 +258,7 @@ local function _onBiteWindow(fightId: string): ()
     state.phase = "hooked"
     state.activeFightId = fightId
     state.tension = 0
+    state.biteAt = os.clock()
     _setPrompt("Reel now!")
     _setMetersVisible(true)
 
@@ -252,6 +276,7 @@ local function _resetToIdle(): ()
     state.activeFightId = nil
     state.tension = 0
     state.isHolding = false
+    state.biteAt = nil
     _setMetersVisible(false)
     _destroyBobber()
 end
@@ -293,23 +318,29 @@ local function _onHeartbeat(dt: number, reelInputRemote: RemoteEvent): ()
         state.tension = math.clamp(state.tension - FishingConfig.TENSION_FALL_RATE_PER_SECOND * dt, 0, 1)
     end
 
+    local now = os.clock()
+    local targetCenter = _targetCenterAt(if state.biteAt then now - state.biteAt else 0)
+    local halfWidth = FishingConfig.TARGET_WIDTH / 2
+
+    if targetZone then
+        targetZone.Position = UDim2.fromScale(targetCenter, 0)
+    end
+
     -- Instant local render — the whole point of PRD §7.7's "feels instant": this does not wait
     -- for a server round trip. The server independently computes the authoritative outcome from
-    -- the same tension stream and has the final say via Fishing_FightResult.
+    -- the same tension stream (and its own copy of the moving target) and has the final say via
+    -- Fishing_FightResult.
     if tensionFill then
         tensionFill.Size = UDim2.fromScale(state.tension, 1)
         if state.tension >= FishingConfig.TENSION_SNAP_THRESHOLD then
             tensionFill.BackgroundColor3 = SNAP_RISK_COLOR
-        elseif
-            state.tension >= FishingConfig.TENSION_TARGET_MIN and state.tension <= FishingConfig.TENSION_TARGET_MAX
-        then
+        elseif state.tension >= targetCenter - halfWidth and state.tension <= targetCenter + halfWidth then
             tensionFill.BackgroundColor3 = IN_BAND_COLOR
         else
             tensionFill.BackgroundColor3 = OUT_OF_BAND_COLOR
         end
     end
 
-    local now = os.clock()
     if now - state.lastSentAt >= FishingConfig.MIN_REEL_INPUT_INTERVAL_SECONDS then
         state.lastSentAt = now
         reelInputRemote:FireServer({ tension = state.tension })

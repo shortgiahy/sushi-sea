@@ -25,8 +25,13 @@ export type FightOutcome = "ongoing" | "caught" | "snapped" | "escaped"
 export type FightConfig = {
     HOOK_REACTION_WINDOW_SECONDS: number,
     FIGHT_DURATION_SECONDS: number,
-    TENSION_TARGET_MIN: number,
-    TENSION_TARGET_MAX: number,
+    TARGET_CENTER: number,
+    TARGET_WIDTH: number,
+    TARGET_MOTION_AMPLITUDE_1: number,
+    TARGET_MOTION_FREQUENCY_1: number,
+    TARGET_MOTION_AMPLITUDE_2: number,
+    TARGET_MOTION_FREQUENCY_2: number,
+    TARGET_MOTION_PHASE_2: number,
     TENSION_SNAP_THRESHOLD: number,
     PROGRESS_GAIN_PER_SECOND_IN_BAND: number,
     PROGRESS_DECAY_PER_SECOND_OUT_OF_BAND: number,
@@ -115,6 +120,28 @@ function FishingCatch.newFight(now: number, fightId: string): FightState
     }
 end
 
+-- Stardew Valley-style moving catch zone (2026-08-06, Giahy Studio feedback — replaces M3's
+-- static tension band). A sum of two incommensurate-frequency sine waves is smooth (no jarring
+-- jumps mid-fight) but not obviously periodic on a fight's timescale, evoking Stardew's erratic
+-- fish drift without needing synchronized randomness: the position is a pure function of elapsed
+-- time since the bite, so the server (here) and the client (FishingController.lua, which
+-- duplicates this exact formula — see its own comment for why it can't just require this module)
+-- independently compute the identical trajectory. Clamped so the zone never drifts off the bar.
+function FishingCatch.targetCenterAt(elapsedSeconds: number, config: FightConfig): number
+    local raw = config.TARGET_CENTER
+        + config.TARGET_MOTION_AMPLITUDE_1 * math.sin(elapsedSeconds * config.TARGET_MOTION_FREQUENCY_1)
+        + config.TARGET_MOTION_AMPLITUDE_2
+            * math.sin(elapsedSeconds * config.TARGET_MOTION_FREQUENCY_2 + config.TARGET_MOTION_PHASE_2)
+
+    local halfWidth = config.TARGET_WIDTH / 2
+    return math.clamp(raw, halfWidth, 1 - halfWidth)
+end
+
+function FishingCatch.isInBand(tension: number, center: number, width: number): boolean
+    local halfWidth = width / 2
+    return tension >= center - halfWidth and tension <= center + halfWidth
+end
+
 -- Applies one validated reel-input sample to a fight and returns the (possibly mutated) state
 -- plus the resulting outcome. The first call after a bite resolves the hook reaction (did the
 -- player respond within HOOK_REACTION_WINDOW_SECONDS?); every call after that advances the
@@ -155,7 +182,8 @@ function FishingCatch.applyReelInput(
         return fight, "snapped"
     end
 
-    local inBand = tension >= config.TENSION_TARGET_MIN and tension <= config.TENSION_TARGET_MAX
+    local targetCenter = FishingCatch.targetCenterAt(now - fight.biteAt, config)
+    local inBand = FishingCatch.isInBand(tension, targetCenter, config.TARGET_WIDTH)
     if inBand then
         fight.inBandSeconds += dt
         fight.progress = math.clamp(fight.progress + dt * config.PROGRESS_GAIN_PER_SECOND_IN_BAND, 0, 1)
