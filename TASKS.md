@@ -21,7 +21,7 @@ Wave 1 is complete. CI-green-on-Actions was not independently reconfirmed after 
 | M1 | Repo + toolchain skeleton | — | done |
 | M2 | Player data backbone | M1 | done — Studio join/load/save not yet manually verified (headless-only so far) |
 | M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | in-progress — `claude/sushi-m3-fishing-feel` |
-| M4 ⚡ | Conversion core + cook verb | M0, M3 | todo |
+| M4 ⚡ | Conversion core + cook verb | M0, M3 | review — `claude/sushi-m4-cook`. `ConversionModule.cook` (yield + grade per the 2026-07-29 cook-verb lock) implemented and headless-tested; `BoatCookController` drives it gray-box on the boat; caught fish now write into `PlayerDataService` inventory (deferred from M3). `rojo build`/selene/stylua clean. **Studio-verified 2026-08-06 (Giahy): cast→catch→cook interaction works end-to-end.** NOT `done`: Giahy confirms the mechanics/feel aren't right yet — tuning pass on `CookConfig.lua` pending specifics. See BUILD_LOG.md 2026-08-06 entries. |
 | M5 ⚡ | Serve verb + economy faucet | M4 | todo |
 | M6 ⚡ | Basic spoilage + slice UI | M5 | todo |
 | M7 | Economy tuning model (numbers, with Giahy) | M6 | todo |
