@@ -14,6 +14,13 @@
 -- browser. A real inventory UI is FreshnessUI's job (PRD §7.1, M6 "slice UI") — every other caught
 -- fish still lands safely in PlayerDataService inventory server-side (EconomyService.server.lua),
 -- it just isn't reachable from this controller until M6 exists. See BUILD_LOG.md M4 entry.
+--
+-- M5 addition: this controller also drives the boat serve verb (PRD §7.1 already named it "manual
+-- cook/serve on the boat"). Serving is pure delivery (docs/design/cook-verb.md) — no board, no
+-- geometry, no minigame — so gray-box scope here is just a button: each press fires
+-- Player_ServePlate for one queued cooked portion. Portions queue up from Cooking_PortionsResolved
+-- (a fish can yield several) and drain one at a time, same "one commit, no batching" shape as the
+-- cook verb's per-loin stroke commits.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -37,6 +44,7 @@ type State = {
     traceAccuracy: number?,
     markerT: number,
     markerDirection: number,
+    servablePortions: { string },
 }
 
 local state: State = {
@@ -46,10 +54,12 @@ local state: State = {
     traceAccuracy = nil,
     markerT = 0,
     markerDirection = 1,
+    servablePortions = {},
 }
 
 local promptLabel: TextLabel? = nil
 local cookButton: TextButton? = nil
+local serveButton: TextButton? = nil
 local barBack: Frame? = nil
 local marker: Frame? = nil
 local resultLabel: TextLabel? = nil
@@ -59,6 +69,7 @@ local onCommitCallback: ((quality: number) -> ())? = nil
 
 local cookTraceRemote: RemoteEvent
 local cookStrokeRemote: RemoteEvent
+local servePlateRemote: RemoteEvent
 
 -- Forward-declared: _onTraceCommitted/_beginStroke/_onStrokeCommitted call each other across the
 -- trace -> stroke(s) -> resolve chain, so each needs to exist as an upvalue before the others'
@@ -109,6 +120,18 @@ local function _buildGui(): ()
     button.Visible = false
     button.Parent = root
 
+    local serve = Instance.new("TextButton")
+    serve.Name = "ServeButton"
+    serve.Size = UDim2.fromOffset(140, 32)
+    serve.Position = UDim2.fromOffset(140, 28)
+    serve.BackgroundColor3 = Color3.fromRGB(100, 80, 40)
+    serve.TextColor3 = Color3.new(1, 1, 1)
+    serve.Font = Enum.Font.SourceSansBold
+    serve.TextSize = 18
+    serve.Text = "Serve (F)"
+    serve.Visible = false
+    serve.Parent = root
+
     local back = Instance.new("Frame")
     back.Name = "MarkerBar"
     back.Size = UDim2.new(1, 0, 0, 22)
@@ -156,9 +179,16 @@ local function _buildGui(): ()
 
     promptLabel = prompt
     cookButton = button
+    serveButton = serve
     barBack = back
     marker = markerFrame
     resultLabel = result
+end
+
+local function _updateServeButtonVisibility(): ()
+    if serveButton then
+        serveButton.Visible = #state.servablePortions > 0
+    end
 end
 
 local function _setPrompt(text: string): ()
@@ -319,7 +349,7 @@ local function _onFightResultForCook(
     end
 end
 
-local function _onPortionsResolved(fishId: string, portions: { { grade: string } }): ()
+local function _onPortionsResolved(fishId: string, portions: { { id: string, grade: string } }): ()
     if not state.heldFish or state.heldFish.fishId ~= fishId then
         return
     end
@@ -327,6 +357,7 @@ local function _onPortionsResolved(fishId: string, portions: { { grade: string }
     local counts: { [string]: number } = { otoro = 0, chutoro = 0, akami = 0 }
     for _, portion in portions do
         counts[portion.grade] = (counts[portion.grade] or 0) + 1
+        table.insert(state.servablePortions, portion.id)
     end
 
     local summary = ("Cooked %d portions — %d otoro, %d chutoro, %d akami"):format(
@@ -347,6 +378,32 @@ local function _onPortionsResolved(fishId: string, portions: { { grade: string }
     end
 
     _resetToIdle()
+    _updateServeButtonVisibility()
+end
+
+-- Serve verb (M5): drains state.servablePortions one press at a time. Removed from the local
+-- queue optimistically — if the server rejects it (already served, portion gone), that's a stale
+-- id anyway and there's nothing meaningful to roll back to client-side.
+local function _onServeButtonPressed(): ()
+    local portionId = table.remove(state.servablePortions, 1)
+    if not portionId then
+        return
+    end
+
+    servePlateRemote:FireServer({ portionId = portionId })
+    _updateServeButtonVisibility()
+end
+
+local function _onPlateResolved(plateValue: number, _breakdown: { [string]: number }): ()
+    if resultLabel then
+        resultLabel.Text = ("Served! +%dg"):format(math.floor(plateValue))
+        resultLabel.Visible = true
+        task.delay(CookConfig.RESULT_MESSAGE_DISPLAY_SECONDS, function()
+            if resultLabel then
+                resultLabel.Visible = false
+            end
+        end)
+    end
 end
 
 local function _onHeartbeat(dt: number): ()
@@ -375,16 +432,22 @@ function BoatCookController.init(): ()
     local remoteEvents = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RemoteEvents")
     cookTraceRemote = remoteEvents:WaitForChild("Player_CookTrace") :: RemoteEvent
     cookStrokeRemote = remoteEvents:WaitForChild("Player_CookStroke") :: RemoteEvent
+    servePlateRemote = remoteEvents:WaitForChild("Player_ServePlate") :: RemoteEvent
     local fightResultRemote = remoteEvents:WaitForChild("Fishing_FightResult") :: RemoteEvent
     local portionsResolvedRemote = remoteEvents:WaitForChild("Cooking_PortionsResolved") :: RemoteEvent
+    local plateResolvedRemote = remoteEvents:WaitForChild("Economy_PlateResolved") :: RemoteEvent
 
     _buildGui()
 
     fightResultRemote.OnClientEvent:Connect(_onFightResultForCook)
     portionsResolvedRemote.OnClientEvent:Connect(_onPortionsResolved)
+    plateResolvedRemote.OnClientEvent:Connect(_onPlateResolved)
 
     if cookButton then
         cookButton.Activated:Connect(_onCookButtonPressed)
+    end
+    if serveButton then
+        serveButton.Activated:Connect(_onServeButtonPressed)
     end
 
     UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
@@ -393,6 +456,8 @@ function BoatCookController.init(): ()
         end
         if input.KeyCode == Enum.KeyCode.E then
             _onCookButtonPressed()
+        elseif input.KeyCode == Enum.KeyCode.F then
+            _onServeButtonPressed()
         end
     end)
 

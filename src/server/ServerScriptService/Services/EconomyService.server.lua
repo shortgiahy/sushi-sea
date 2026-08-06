@@ -3,8 +3,8 @@
 -- M3 scope note: this file owns the cast->hook->reel loop: validating Player_CastLine /
 -- Player_ReelInput, rate-limiting them per player, running the authoritative fight simulation,
 -- and resolving *what* got caught (species, quality) — never what it's worth. Full plate-value
--- resolution (species_base × cooking_extraction × freshness_polish × dry_age_mutation) is still
--- M5's job, once FishTable's authored cut_base[species][grade] lookup exists.
+-- resolution (cut_base[species][grade] × cooking_extraction × freshness_polish × dry_age_mutation)
+-- is M5's job, below, once served via the boat serve verb.
 --
 -- M4 addition: caught fish are now written into PlayerDataService inventory (deferred from M3 —
 -- see BUILD_LOG.md M3 entry), and this file also validates the cook verb's Player_CookTrace /
@@ -14,6 +14,10 @@
 -- validation is architecturally the same shape as the fishing input validation already here
 -- (authoritative resolution of a player-fired verb RemoteEvent), so it lives alongside it rather
 -- than inventing an unlisted service file.
+--
+-- M5 addition: this file also validates the boat serve verb's Player_ServePlate and resolves
+-- served_plate_value via PlateValueResolver.lua (PRD §5's one faucet) — same "lives alongside the
+-- existing verb-input validation rather than a new service file" reasoning as M4's cook verb.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -21,9 +25,12 @@ local HttpService = game:GetService("HttpService")
 
 local FishingCatch = require(ServerStorage.Modules.FishingCatch)
 local ConversionModule = require(ServerStorage.Modules.ConversionModule)
+local PlateValueResolver = require(ServerStorage.Modules.PlateValueResolver)
+local FishTable = require(ServerStorage.Modules.FishTable)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local FishingConfig = require(ReplicatedStorage.Config.FishingConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
+local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 local FishSpecies = require(ReplicatedStorage.Modules.FishSpecies)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
@@ -34,6 +41,19 @@ local fightResultRemote: RemoteEvent = RemoteEvents.Fishing_FightResult
 local cookTraceRemote: RemoteEvent = RemoteEvents.Player_CookTrace
 local cookStrokeRemote: RemoteEvent = RemoteEvents.Player_CookStroke
 local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolved
+local servePlateRemote: RemoteEvent = RemoteEvents.Player_ServePlate
+local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
+
+-- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
+-- (see EconomyConfig.lua's header for why this isn't duplicated there) rather than defining a
+-- second, potentially divergent one for the same concept.
+local PLATE_VALUE_TUNING: PlateValueResolver.PlateValueTuning = {
+    MAX_COOKING_LEVEL_FOR_EXTRACTION = CookConfig.MAX_COOKING_LEVEL_FOR_EXTRACTION,
+    CLAMP_FRESHNESS_MIN = EconomyConfig.CLAMP_FRESHNESS_MIN,
+    CLAMP_FRESHNESS_MAX = EconomyConfig.CLAMP_FRESHNESS_MAX,
+    FRESHNESS_DECAY_WINDOW_SECONDS = EconomyConfig.FRESHNESS_DECAY_WINDOW_SECONDS,
+    DRY_AGE_MUTATION_BASELINE = EconomyConfig.DRY_AGE_MUTATION_BASELINE,
+}
 
 -- Shared-authoritative subset of FishingConfig the fight simulation needs (client-only feel
 -- knobs like tension rise/fall rate are deliberately excluded — the server never uses them).
@@ -82,6 +102,10 @@ type PendingCook = {
 }
 
 local playerCookStates: { [number]: PendingCook? } = {}
+
+-- Serve-verb debounce (M5). Separate table for the same reason playerCookStates is separate from
+-- playerStates: serving is its own verb lifecycle, not a variant of fishing or cooking state.
+local playerLastServeAt: { [number]: number } = {}
 
 local function _findInventoryFish(data: any, fishId: string): any
     for _, fish in data.inventory do
@@ -300,17 +324,24 @@ local function _resolveCook(player: Player, data: any, fish: any, traceAccuracy:
         end
     end
 
+    -- Each cooked portion needs its server-assigned id sent back to the client (not just its
+    -- grade) so BoatCookController can later name a specific portion in Player_ServePlate — the
+    -- serve verb resolves one cookedPortions entry at a time, the same shape as _onCookStroke
+    -- addressing one loin at a time.
     local now = os.time()
+    local resolvedPortions: { { id: string, grade: string } } = {}
     for _, portion in portions do
-        table.insert(data.cookedPortions, {
+        local cookedPortion = {
             id = HttpService:GenerateGUID(false),
             species = fish.species,
             grade = portion.grade,
             cookedAt = now,
-        })
+        }
+        table.insert(data.cookedPortions, cookedPortion)
+        table.insert(resolvedPortions, { id = cookedPortion.id, grade = cookedPortion.grade })
     end
 
-    portionsResolvedRemote:FireClient(player, fish.id, portions)
+    portionsResolvedRemote:FireClient(player, fish.id, resolvedPortions)
 end
 
 -- Mirrors EconomyService's fishing-fight timeout pattern: if a client stops sending
@@ -425,12 +456,75 @@ local function _onCookStroke(player: Player, payload: any): ()
     _resolveCook(player, data, fish, pending.traceAccuracy, pending.strokeQuality)
 end
 
+-- Boat serve verb (M5, PRD §4/§5): pure delivery — resolves one cookedPortions entry into gold
+-- via PlateValueResolver and removes it from inventory. No order matching, no plating minigame;
+-- the "verb" is the button press itself (docs/design/cook-verb.md's serve-verb scope).
+local function _onServePlate(player: Player, payload: any): ()
+    local portionId = if typeof(payload) == "table" then payload.portionId else nil
+    if type(portionId) ~= "string" then
+        return
+    end
+
+    local now = os.clock()
+    local lastServeAt = playerLastServeAt[player.UserId]
+    if lastServeAt and (now - lastServeAt) < EconomyConfig.MIN_SERVE_ACTION_INTERVAL_SECONDS then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local portionIndex, portion = nil, nil
+    for i, entry in data.cookedPortions do
+        if entry.id == portionId then
+            portionIndex, portion = i, entry
+            break
+        end
+    end
+    if not portion then
+        return -- already served, or never existed — expected-failure path (PRD §8), not an error
+    end
+
+    local cutBase = FishTable.cutBaseFor(portion.species, portion.grade)
+    if not cutBase then
+        -- Refuse rather than resolve an undefined price as 0/nil — a missing FishTable row is a
+        -- content gap (see FishTable.lua's header), not a state a served plate should silently
+        -- pass through.
+        warn(
+            ("[EconomyService] no FishTable.cutBase for %s/%s — refusing to resolve the plate"):format(
+                portion.species,
+                portion.grade
+            )
+        )
+        return
+    end
+
+    playerLastServeAt[player.UserId] = now
+
+    local freshnessElapsedSeconds = math.max(os.time() - portion.cookedAt, 0)
+    local plateValue, breakdown = PlateValueResolver.resolve({
+        cutBase = cutBase,
+        cookingLevel = data.skills.cooking.level,
+        freshnessElapsedSeconds = freshnessElapsedSeconds,
+    }, PLATE_VALUE_TUNING)
+
+    table.remove(data.cookedPortions, portionIndex)
+    data.economy.gold += plateValue
+
+    plateResolvedRemote:FireClient(player, plateValue, breakdown)
+end
+
 castLineRemote.OnServerEvent:Connect(_onCastLine)
 reelInputRemote.OnServerEvent:Connect(_onReelInput)
 cookTraceRemote.OnServerEvent:Connect(_onCookTrace)
 cookStrokeRemote.OnServerEvent:Connect(_onCookStroke)
+servePlateRemote.OnServerEvent:Connect(_onServePlate)
 
 Players.PlayerRemoving:Connect(function(player: Player)
     playerStates[player.UserId] = nil
     playerCookStates[player.UserId] = nil
+    playerLastServeAt[player.UserId] = nil
 end)
