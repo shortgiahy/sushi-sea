@@ -12,10 +12,14 @@
 -- - HOOK_REACTION_WINDOW is short enough to demand attention (the "hook" is a reaction-time
 --   beat, the moment PRD §1 names as the retention-critical one) but wide enough to clear
 --   normal human reaction time plus a little network latency.
--- - The tension target band (TENSION_TARGET_MIN/MAX) is deliberately wide — 0.40 of the full
---   [0, 1] range — because this is a mobile-compatible game (PRD platform table). The first
---   pass favors a forgiving, learnable band over pixel-perfect precision; narrow it once real
---   play shows it's too easy.
+-- - The FISH moves on its own (FISH_CENTER drifts via FISH_MOTION_*); the PLAYER moves a
+--   fixed-width catch box (hold = right, release = drifts left, same tension control as before)
+--   trying to keep the fish inside it — real Stardew Valley fishing, not a zone that chases the
+--   player (2026-08-06, Giahy Studio feedback: the first pass had this backwards). CATCH_BOX_WIDTH
+--   (0.40) keeps the box exactly as wide/forgiving as the old static band was — fish motion is the
+--   new difficulty axis, not also a narrower box — because this is still a mobile-compatible game
+--   (PRD platform table). See FishingCatch.lua's fishPositionAt for why the fish's motion is a
+--   deterministic sum of two sine waves rather than true randomness.
 -- - PROGRESS_GAIN/DECAY rates are set so a fight is winnable with ~5 cumulative seconds of
 --   in-band tension inside a 12s budget — enough headroom for the oscillation a first-time
 --   player produces while learning the band.
@@ -48,8 +52,18 @@ FishingConfig.HOOK_REACTION_WINDOW_SECONDS = 1.2
 
 -- Reel (tension minigame)
 FishingConfig.FIGHT_DURATION_SECONDS = 12.0
-FishingConfig.TENSION_TARGET_MIN = 0.35
-FishingConfig.TENSION_TARGET_MAX = 0.75
+FishingConfig.FISH_CENTER = 0.55
+FishingConfig.CATCH_BOX_WIDTH = 0.40
+-- Fish motion: raw = FISH_CENTER + AMPLITUDE_1*sin(t*FREQUENCY_1) + AMPLITUDE_2*sin(t*FREQUENCY_2 + PHASE_2),
+-- clamped to keep the fish fully on the bar. Amplitudes sum to 0.42, giving the fish room to swing
+-- well off its resting point without pinning against the clamp on every cycle. Frequencies 0.9 and
+-- 2.3 rad/s are deliberately non-multiples of each other so the combined motion doesn't read as a
+-- single obvious period — placeholder like everything else here, tune by feel.
+FishingConfig.FISH_MOTION_AMPLITUDE_1 = 0.28
+FishingConfig.FISH_MOTION_FREQUENCY_1 = 0.9
+FishingConfig.FISH_MOTION_AMPLITUDE_2 = 0.14
+FishingConfig.FISH_MOTION_FREQUENCY_2 = 2.3
+FishingConfig.FISH_MOTION_PHASE_2 = 1.7
 FishingConfig.TENSION_SNAP_THRESHOLD = 0.95
 FishingConfig.PROGRESS_GAIN_PER_SECOND_IN_BAND = 0.20
 FishingConfig.PROGRESS_DECAY_PER_SECOND_OUT_OF_BAND = 0.08

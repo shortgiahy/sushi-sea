@@ -3,11 +3,20 @@
 -- BUILD_LOG.md M3 entry for what remains a Studio/human playtest concern.
 local FishingCatch = require("../src/server/ServerStorage/Modules/FishingCatch")
 
+-- Fish motion amplitudes are 0 here so this fixture behaves exactly like the pre-2026-08-06 static
+-- band (FISH_CENTER=0.55, CATCH_BOX_WIDTH=0.40 => [0.35, 0.75], the old TENSION_TARGET_MIN/MAX) —
+-- every fight-simulation test below was written against that static band and stays meaningful
+-- unchanged. Motion itself is covered separately by the fishPositionAt/isInBand tests below.
 local FIGHT_CONFIG = {
     HOOK_REACTION_WINDOW_SECONDS = 1.2,
     FIGHT_DURATION_SECONDS = 12.0,
-    TENSION_TARGET_MIN = 0.35,
-    TENSION_TARGET_MAX = 0.75,
+    FISH_CENTER = 0.55,
+    CATCH_BOX_WIDTH = 0.40,
+    FISH_MOTION_AMPLITUDE_1 = 0,
+    FISH_MOTION_FREQUENCY_1 = 0.9,
+    FISH_MOTION_AMPLITUDE_2 = 0,
+    FISH_MOTION_FREQUENCY_2 = 2.3,
+    FISH_MOTION_PHASE_2 = 1.7,
     TENSION_SNAP_THRESHOLD = 0.95,
     PROGRESS_GAIN_PER_SECOND_IN_BAND = 0.20,
     PROGRESS_DECAY_PER_SECOND_OUT_OF_BAND = 0.08,
@@ -20,19 +29,40 @@ do
     assert(FishingCatch.isStructurallyValidLocation("not a location") == false, "a string must be rejected")
     assert(FishingCatch.isStructurallyValidLocation(nil) == false, "nil must be rejected")
     assert(FishingCatch.isStructurallyValidLocation({ X = 1, Y = 2 }) == false, "missing Z must be rejected")
-    assert(FishingCatch.isStructurallyValidLocation({ X = "1", Y = 2, Z = 3 }) == false, "non-number component must be rejected")
-    assert(FishingCatch.isStructurallyValidLocation({ X = 0 / 0, Y = 0, Z = 0 }) == false, "NaN component must be rejected")
-    assert(FishingCatch.isStructurallyValidLocation({ X = math.huge, Y = 0, Z = 0 }) == false, "+inf component must be rejected")
-    assert(FishingCatch.isStructurallyValidLocation({ X = -math.huge, Y = 0, Z = 0 }) == false, "-inf component must be rejected")
+    assert(
+        FishingCatch.isStructurallyValidLocation({ X = "1", Y = 2, Z = 3 }) == false,
+        "non-number component must be rejected"
+    )
+    assert(
+        FishingCatch.isStructurallyValidLocation({ X = 0 / 0, Y = 0, Z = 0 }) == false,
+        "NaN component must be rejected"
+    )
+    assert(
+        FishingCatch.isStructurallyValidLocation({ X = math.huge, Y = 0, Z = 0 }) == false,
+        "+inf component must be rejected"
+    )
+    assert(
+        FishingCatch.isStructurallyValidLocation({ X = -math.huge, Y = 0, Z = 0 }) == false,
+        "-inf component must be rejected"
+    )
     print("FishingCatch.spec: isStructurallyValidLocation rejects garbage OK")
 end
 
 -- isLocationWithinRange: distance check used to reject absurd cast targets.
 do
     local origin = { X = 0, Y = 0, Z = 0 }
-    assert(FishingCatch.isLocationWithinRange({ X = 100, Y = 0, Z = 0 }, origin, 120) == true, "100 studs must be within a 120 stud range")
-    assert(FishingCatch.isLocationWithinRange({ X = 200, Y = 0, Z = 0 }, origin, 120) == false, "200 studs must exceed a 120 stud range")
-    assert(FishingCatch.isLocationWithinRange({ X = 120, Y = 0, Z = 0 }, origin, 120) == true, "exactly at the max distance must be within range")
+    assert(
+        FishingCatch.isLocationWithinRange({ X = 100, Y = 0, Z = 0 }, origin, 120) == true,
+        "100 studs must be within a 120 stud range"
+    )
+    assert(
+        FishingCatch.isLocationWithinRange({ X = 200, Y = 0, Z = 0 }, origin, 120) == false,
+        "200 studs must exceed a 120 stud range"
+    )
+    assert(
+        FishingCatch.isLocationWithinRange({ X = 120, Y = 0, Z = 0 }, origin, 120) == true,
+        "exactly at the max distance must be within range"
+    )
     print("FishingCatch.spec: isLocationWithinRange OK")
 end
 
@@ -64,16 +94,28 @@ end
 -- shouldThrottleReelInput: server-side spam guard on Player_ReelInput.
 do
     assert(FishingCatch.shouldThrottleReelInput(10, nil, 0.08) == false, "the first input must never be throttled")
-    assert(FishingCatch.shouldThrottleReelInput(10, 9.95, 0.08) == true, "an input 0.05s after the last accepted one must be throttled")
-    assert(FishingCatch.shouldThrottleReelInput(10, 9.9, 0.08) == false, "an input 0.1s after the last accepted one must pass")
+    assert(
+        FishingCatch.shouldThrottleReelInput(10, 9.95, 0.08) == true,
+        "an input 0.05s after the last accepted one must be throttled"
+    )
+    assert(
+        FishingCatch.shouldThrottleReelInput(10, 9.9, 0.08) == false,
+        "an input 0.1s after the last accepted one must pass"
+    )
     print("FishingCatch.spec: shouldThrottleReelInput OK")
 end
 
 -- rollBiteWaitSeconds: stays within [min, max] regardless of the random roll.
 do
-    assert(FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function() return 0 end) == 2.0, "a roll of 0 must produce the minimum wait")
-    assert(FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function() return 1 end) == 6.0, "a roll of 1 must produce the maximum wait")
-    local mid = FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function() return 0.5 end)
+    assert(FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function()
+        return 0
+    end) == 2.0, "a roll of 0 must produce the minimum wait")
+    assert(FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function()
+        return 1
+    end) == 6.0, "a roll of 1 must produce the maximum wait")
+    local mid = FishingCatch.rollBiteWaitSeconds(2.0, 6.0, function()
+        return 0.5
+    end)
     assert(mid == 4.0, "a roll of 0.5 must produce the midpoint wait, got " .. tostring(mid))
     print("FishingCatch.spec: rollBiteWaitSeconds stays in range OK")
 end
@@ -153,6 +195,73 @@ do
     print("FishingCatch.spec: applyReelInput out-of-band decay without failure OK")
 end
 
+-- fishPositionAt: deterministic Stardew Valley-style fish drift (2026-08-06, corrects the first
+-- moving-target pass which had the fish and the player-controlled box backwards). Must start at
+-- FISH_CENTER exactly when PHASE_2=0 (both sines are 0 at t=0), stay bounded on the bar always,
+-- and actually move over time rather than sitting static.
+do
+    local motionConfig = {
+        FISH_CENTER = 0.5,
+        CATCH_BOX_WIDTH = 0.22,
+        FISH_MOTION_AMPLITUDE_1 = 0.28,
+        FISH_MOTION_FREQUENCY_1 = 0.9,
+        FISH_MOTION_AMPLITUDE_2 = 0.14,
+        FISH_MOTION_FREQUENCY_2 = 2.3,
+        FISH_MOTION_PHASE_2 = 1.7,
+    }
+
+    -- Independently re-derive the formula's expected value at t=0 (PHASE_2 is nonzero, so the
+    -- second sine term is NOT 0 here — only checking "it equals FISH_CENTER" would be wrong).
+    local expectedAtZero = 0.5 + 0.28 * math.sin(0) + 0.14 * math.sin(1.7)
+    assert(
+        math.abs(FishingCatch.fishPositionAt(0, motionConfig) - expectedAtZero) < 1e-9,
+        "fishPositionAt(0, ...) must match the documented formula exactly"
+    )
+
+    local zeroPhaseConfig = {
+        FISH_CENTER = 0.5,
+        CATCH_BOX_WIDTH = 0.22,
+        FISH_MOTION_AMPLITUDE_1 = 0.28,
+        FISH_MOTION_FREQUENCY_1 = 0.9,
+        FISH_MOTION_AMPLITUDE_2 = 0.14,
+        FISH_MOTION_FREQUENCY_2 = 2.3,
+        FISH_MOTION_PHASE_2 = 0,
+    }
+    assert(
+        FishingCatch.fishPositionAt(0, zeroPhaseConfig) == 0.5,
+        "with PHASE_2 = 0, both sine terms are 0 at elapsed=0, so the fish must sit exactly at FISH_CENTER"
+    )
+
+    local halfWidth = motionConfig.CATCH_BOX_WIDTH / 2
+    local t = 0
+    while t <= 20 do
+        local position = FishingCatch.fishPositionAt(t, motionConfig)
+        assert(
+            position >= halfWidth - 1e-9 and position <= 1 - halfWidth + 1e-9,
+            "the fish must always stay fully within [0, 1], got position="
+                .. tostring(position)
+                .. " at t="
+                .. tostring(t)
+        )
+        t += 0.37
+    end
+
+    local position1 = FishingCatch.fishPositionAt(1.0, motionConfig)
+    local position2 = FishingCatch.fishPositionAt(2.0, motionConfig)
+    assert(position1 ~= position2, "the fish must actually move between two different elapsed times, not sit static")
+    print("FishingCatch.spec: fishPositionAt bounded + moving OK")
+end
+
+-- isInBand: inclusive-range check, symmetric regardless of which argument is "the fish" and which
+-- is "the player's box center" — the same check applyReelInput now runs every tick against a
+-- fresh fishPositionAt() result and the player's current tension.
+do
+    assert(FishingCatch.isInBand(0.5, 0.5, 0.2) == true, "fish exactly at the box center must be in band")
+    assert(FishingCatch.isInBand(0.6, 0.5, 0.2) == true, "fish at the edge of the box must be in band (inclusive)")
+    assert(FishingCatch.isInBand(0.61, 0.5, 0.2) == false, "fish just outside the box must not be in band")
+    print("FishingCatch.spec: isInBand OK")
+end
+
 -- tick: resolves a fight that never receives further input (client went silent).
 do
     local waitingFight = FishingCatch.newFight(0, "fight-6")
@@ -191,17 +300,31 @@ do
         { id = "rare_fish", displayName = "Rare Fish", rarity = "rare", catchWeight = 10 },
     }
 
-    local low = FishingCatch.rollCatch(species, 0.5, function() return 0 end)
+    local low = FishingCatch.rollCatch(species, 0.5, function()
+        return 0
+    end)
     assert(low ~= nil and low.speciesId == "common_fish", "the lowest roll must land on the first cumulative band")
 
-    local high = FishingCatch.rollCatch(species, 0.5, function() return 1 end)
+    local high = FishingCatch.rollCatch(species, 0.5, function()
+        return 1
+    end)
     assert(high ~= nil and high.speciesId == "rare_fish", "the highest roll must land on the last cumulative band")
 
-    assert(FishingCatch.rollCatch(species, 0.4, function() return 0 end).quality == "poor", "qualityScore == 0.4 must be poor (band boundary is inclusive)")
-    assert(FishingCatch.rollCatch(species, 0.41, function() return 0 end).quality == "good", "qualityScore just above 0.4 must be good")
-    assert(FishingCatch.rollCatch(species, 0.75, function() return 0 end).quality == "good", "qualityScore == 0.75 must be good (band boundary is inclusive)")
-    assert(FishingCatch.rollCatch(species, 0.76, function() return 0 end).quality == "excellent", "qualityScore just above 0.75 must be excellent")
-    assert(FishingCatch.rollCatch(species, 1, function() return 0 end).quality == "excellent", "qualityScore == 1 must be excellent")
+    assert(FishingCatch.rollCatch(species, 0.4, function()
+        return 0
+    end).quality == "poor", "qualityScore == 0.4 must be poor (band boundary is inclusive)")
+    assert(FishingCatch.rollCatch(species, 0.41, function()
+        return 0
+    end).quality == "good", "qualityScore just above 0.4 must be good")
+    assert(FishingCatch.rollCatch(species, 0.75, function()
+        return 0
+    end).quality == "good", "qualityScore == 0.75 must be good (band boundary is inclusive)")
+    assert(FishingCatch.rollCatch(species, 0.76, function()
+        return 0
+    end).quality == "excellent", "qualityScore just above 0.75 must be excellent")
+    assert(FishingCatch.rollCatch(species, 1, function()
+        return 0
+    end).quality == "excellent", "qualityScore == 1 must be excellent")
 
     assert(FishingCatch.rollCatch({}, 0.5) == nil, "an empty species table must return nil, not error")
     local zeroWeightSpecies = { { id = "x", displayName = "X", rarity = "common", catchWeight = 0 } }

@@ -23,26 +23,49 @@ type ControllerState = {
     phase: ControllerPhase,
     activeFightId: string?,
     tension: number,
+    progress: number,
     isHolding: boolean,
     lastSentAt: number,
+    biteAt: number?,
 }
 
 local state: ControllerState = {
     phase = "idle",
     activeFightId = nil,
     tension = 0,
+    progress = 0,
     isHolding = false,
     lastSentAt = 0,
+    biteAt = nil,
 }
 
 local bobber: BasePart? = nil
 local promptLabel: TextLabel? = nil
-local tensionFill: Frame? = nil
+local catchBox: Frame? = nil
+local fishSprite: Frame? = nil
 local progressFill: Frame? = nil
 
 local IN_BAND_COLOR = Color3.fromRGB(80, 200, 120)
 local OUT_OF_BAND_COLOR = Color3.fromRGB(230, 200, 60)
 local SNAP_RISK_COLOR = Color3.fromRGB(220, 70, 70)
+local FISH_COLOR = Color3.fromRGB(230, 140, 40)
+
+-- Duplicates FishingCatch.fishPositionAt exactly (server-authoritative version lives there).
+-- FishingController can't require it directly — FishingCatch.lua lives in ServerStorage, which
+-- doesn't replicate to clients — so this is a small, deliberate duplication rather than inventing
+-- a new client/server module-sharing mechanism for one function. If the motion formula changes,
+-- update both; there is no anti-spoof concern in them drifting slightly out of sync (worst case is
+-- a briefly-misleading render, never an economy/inventory effect — the server's copy is what
+-- actually resolves the catch).
+local function _fishPositionAt(elapsedSeconds: number): number
+    local raw = FishingConfig.FISH_CENTER
+        + FishingConfig.FISH_MOTION_AMPLITUDE_1 * math.sin(elapsedSeconds * FishingConfig.FISH_MOTION_FREQUENCY_1)
+        + FishingConfig.FISH_MOTION_AMPLITUDE_2
+            * math.sin(elapsedSeconds * FishingConfig.FISH_MOTION_FREQUENCY_2 + FishingConfig.FISH_MOTION_PHASE_2)
+
+    local halfWidth = FishingConfig.CATCH_BOX_WIDTH / 2
+    return math.clamp(raw, halfWidth, 1 - halfWidth)
+end
 
 local function _buildGui(): ()
     local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -82,23 +105,31 @@ local function _buildGui(): ()
     tensionBack.Visible = false
     tensionBack.Parent = root
 
-    -- Target-zone highlight: a static strip showing TENSION_TARGET_MIN..MAX, drawn once since the
-    -- band itself doesn't move during a fight (only the fill on top of it does).
-    local targetZone = Instance.new("Frame")
-    targetZone.Name = "TargetZone"
-    targetZone.BackgroundColor3 = Color3.fromRGB(60, 100, 60)
-    targetZone.BorderSizePixel = 0
-    targetZone.Position = UDim2.fromScale(FishingConfig.TENSION_TARGET_MIN, 0)
-    targetZone.Size = UDim2.fromScale(FishingConfig.TENSION_TARGET_MAX - FishingConfig.TENSION_TARGET_MIN, 1)
-    targetZone.Parent = tensionBack
+    -- Catch box: fixed-width, player-moved (2026-08-06, Giahy Studio feedback — real Stardew
+    -- Valley fishing: the PLAYER moves this box via hold/release, the FISH drifts on its own, goal
+    -- is keep the fish inside the box). Position (its center) tracks state.tension every frame in
+    -- _onHeartbeat; Size stays fixed at CATCH_BOX_WIDTH. Initial Position here is just a
+    -- placeholder before the first fight ever begins.
+    local box = Instance.new("Frame")
+    box.Name = "CatchBox"
+    box.BackgroundColor3 = OUT_OF_BAND_COLOR
+    box.BorderSizePixel = 0
+    box.AnchorPoint = Vector2.new(0.5, 0)
+    box.Position = UDim2.fromScale(0, 0)
+    box.Size = UDim2.fromScale(FishingConfig.CATCH_BOX_WIDTH, 1)
+    box.Parent = tensionBack
 
-    local tFill = Instance.new("Frame")
-    tFill.Name = "Fill"
-    tFill.BackgroundColor3 = OUT_OF_BAND_COLOR
-    tFill.BorderSizePixel = 0
-    tFill.Size = UDim2.fromScale(0, 1)
-    tFill.ZIndex = 2
-    tFill.Parent = tensionBack
+    -- Fish sprite: a small marker that drifts on its own (_fishPositionAt), rendered above the
+    -- catch box so it's always visible against it. Gray-box stand-in for real fish art (M18).
+    local fish = Instance.new("Frame")
+    fish.Name = "FishSprite"
+    fish.BackgroundColor3 = FISH_COLOR
+    fish.BorderSizePixel = 0
+    fish.AnchorPoint = Vector2.new(0.5, 0)
+    fish.Position = UDim2.fromScale(FishingConfig.FISH_CENTER, 0)
+    fish.Size = UDim2.fromScale(0.05, 1)
+    fish.ZIndex = 3
+    fish.Parent = tensionBack
 
     local progressBack = Instance.new("Frame")
     progressBack.Name = "ProgressBar"
@@ -119,7 +150,8 @@ local function _buildGui(): ()
     screenGui.Parent = playerGui
 
     promptLabel = prompt
-    tensionFill = tFill
+    catchBox = box
+    fishSprite = fish
     progressFill = pFill
 end
 
@@ -132,7 +164,7 @@ local function _setPrompt(text: string): ()
 end
 
 local function _setMetersVisible(visible: boolean): ()
-    local tensionBar = tensionFill and (tensionFill.Parent :: Frame?)
+    local tensionBar = catchBox and (catchBox.Parent :: Frame?)
     local progressBar = progressFill and (progressFill.Parent :: Frame?)
     if tensionBar then
         tensionBar.Visible = visible
@@ -235,6 +267,8 @@ local function _onBiteWindow(fightId: string): ()
     state.phase = "hooked"
     state.activeFightId = fightId
     state.tension = 0
+    state.progress = 0
+    state.biteAt = os.clock()
     _setPrompt("Reel now!")
     _setMetersVisible(true)
 
@@ -251,7 +285,9 @@ local function _resetToIdle(): ()
     state.phase = "idle"
     state.activeFightId = nil
     state.tension = 0
+    state.progress = 0
     state.isHolding = false
+    state.biteAt = nil
     _setMetersVisible(false)
     _destroyBobber()
 end
@@ -287,29 +323,51 @@ local function _onHeartbeat(dt: number, reelInputRemote: RemoteEvent): ()
         return
     end
 
+    -- Player-controlled catch box: hold moves it right, release drifts it left. Unchanged from
+    -- before — only its *rendering* changes (a moving fixed-width box instead of a growing fill).
     if state.isHolding then
         state.tension = math.clamp(state.tension + FishingConfig.TENSION_RISE_RATE_PER_SECOND * dt, 0, 1)
     else
         state.tension = math.clamp(state.tension - FishingConfig.TENSION_FALL_RATE_PER_SECOND * dt, 0, 1)
     end
 
+    local now = os.clock()
+    local fishPosition = _fishPositionAt(if state.biteAt then now - state.biteAt else 0)
+    local halfWidth = FishingConfig.CATCH_BOX_WIDTH / 2
+    local inBand = fishPosition >= state.tension - halfWidth and fishPosition <= state.tension + halfWidth
+
+    if fishSprite then
+        fishSprite.Position = UDim2.fromScale(fishPosition, 0)
+    end
+
     -- Instant local render — the whole point of PRD §7.7's "feels instant": this does not wait
     -- for a server round trip. The server independently computes the authoritative outcome from
-    -- the same tension stream and has the final say via Fishing_FightResult.
-    if tensionFill then
-        tensionFill.Size = UDim2.fromScale(state.tension, 1)
+    -- the same tension stream (and its own copy of the fish's motion) and has the final say via
+    -- Fishing_FightResult.
+    if catchBox then
+        catchBox.Position = UDim2.fromScale(state.tension, 0)
         if state.tension >= FishingConfig.TENSION_SNAP_THRESHOLD then
-            tensionFill.BackgroundColor3 = SNAP_RISK_COLOR
-        elseif
-            state.tension >= FishingConfig.TENSION_TARGET_MIN and state.tension <= FishingConfig.TENSION_TARGET_MAX
-        then
-            tensionFill.BackgroundColor3 = IN_BAND_COLOR
+            catchBox.BackgroundColor3 = SNAP_RISK_COLOR
+        elseif inBand then
+            catchBox.BackgroundColor3 = IN_BAND_COLOR
         else
-            tensionFill.BackgroundColor3 = OUT_OF_BAND_COLOR
+            catchBox.BackgroundColor3 = OUT_OF_BAND_COLOR
         end
     end
 
-    local now = os.clock()
+    -- Local progress render, mirroring FishingCatch.applyReelInput's gain/decay exactly (same
+    -- constants, same shape) so the bar tracks what the server is about to confirm. This bar
+    -- existed since M3 but was never actually wired to a value — Giahy caught it in the
+    -- 2026-08-06 Studio playtest ("there's a second bar... it doesn't work").
+    if inBand then
+        state.progress = math.clamp(state.progress + dt * FishingConfig.PROGRESS_GAIN_PER_SECOND_IN_BAND, 0, 1)
+    else
+        state.progress = math.clamp(state.progress - dt * FishingConfig.PROGRESS_DECAY_PER_SECOND_OUT_OF_BAND, 0, 1)
+    end
+    if progressFill then
+        progressFill.Size = UDim2.fromScale(state.progress, 1)
+    end
+
     if now - state.lastSentAt >= FishingConfig.MIN_REEL_INPUT_INTERVAL_SECONDS then
         state.lastSentAt = now
         reelInputRemote:FireServer({ tension = state.tension })
