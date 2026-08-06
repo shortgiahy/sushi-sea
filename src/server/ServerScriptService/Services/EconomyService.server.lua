@@ -159,44 +159,71 @@ local function _startBiteTimer(player: Player, state: PlayerFishingState): ()
         state.pendingCast = false
 
         if not Players:GetPlayerByUserId(player.UserId) then
+            warn(("[EconomyService][debug] %s: bite timer fired but player is gone"):format(player.Name))
             return
         end
         if state.fight ~= nil then
+            warn(("[EconomyService][debug] %s: bite timer fired but a fight already exists (stray timer)"):format(player.Name))
             return -- a stray timer from an already-superseded cast cycle; should not happen, but cheap to guard
         end
 
         local fightId = HttpService:GenerateGUID(false)
         state.fight = FishingCatch.newFight(os.clock(), fightId)
+        warn(("[EconomyService][debug] %s: bite timer fired after %.1fs, firing Fishing_BiteWindow"):format(player.Name, waitSeconds))
         biteWindowRemote:FireClient(player, fightId)
         _scheduleTimeout(player, state, fightId)
     end)
 end
 
+-- TEMPORARY (2026-08-06): this loop has never been playtested in real Studio (BUILD_LOG.md M3
+-- entry) and every rejection below is otherwise silent by design (anti-spoof: no oracle for a
+-- spoofed client). Giahy hit "stuck on waiting for a bite" with no way to tell why. These warns
+-- are diagnostic scaffolding for that session, not a permanent behavior change — remove once the
+-- cast->bite path is confirmed working end-to-end in Studio.
 local function _onCastLine(player: Player, payload: any): ()
     local location = if typeof(payload) == "table" then payload.location else nil
     if not FishingCatch.isStructurallyValidLocation(location) then
+        warn(("[EconomyService][debug] %s: cast rejected — structurally invalid location"):format(player.Name))
         return
     end
 
     local root = _getCharacterRoot(player)
     if not root then
+        warn(("[EconomyService][debug] %s: cast rejected — no HumanoidRootPart (character not spawned/loaded yet)"):format(
+            player.Name
+        ))
         return
     end
     if not FishingCatch.isLocationWithinRange(location, root.Position, FishingConfig.MAX_CAST_DISTANCE_STUDS) then
+        local dx, dy, dz = location.X - root.Position.X, location.Y - root.Position.Y, location.Z - root.Position.Z
+        local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+        warn(
+            (
+                "[EconomyService][debug] %s: cast rejected — target %.1f studs from character, max is %d (root=%s, target=%s)"
+            ):format(player.Name, distance, FishingConfig.MAX_CAST_DISTANCE_STUDS, tostring(root.Position), tostring(location))
+        )
         return
     end
 
     local state = _stateFor(player.UserId)
     local now = os.clock()
     if state.fight ~= nil then
+        warn(("[EconomyService][debug] %s: cast rejected — already mid-fight"):format(player.Name))
         return
     end
     if not FishingCatch.canCast(now, state.lastCastAt, state.pendingCast, FishingConfig.CAST_COOLDOWN_SECONDS) then
+        warn(
+            ("[EconomyService][debug] %s: cast rejected — cooldown/pending-cast guard (pendingCast=%s)"):format(
+                player.Name,
+                tostring(state.pendingCast)
+            )
+        )
         return
     end
 
     state.lastCastAt = now
     state.pendingCast = true
+    warn(("[EconomyService][debug] %s: cast ACCEPTED, waiting on bite timer"):format(player.Name))
     _startBiteTimer(player, state)
 end
 
