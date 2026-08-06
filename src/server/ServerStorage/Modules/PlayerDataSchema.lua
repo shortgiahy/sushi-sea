@@ -1,7 +1,7 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 local TUTORIAL_LOAN_DEFAULT = 500
 
 export type SkillEntry = { level: number, xp: number }
@@ -15,6 +15,12 @@ export type Skills = {
 }
 
 export type InventoryFish = { id: string, species: string, caughtAt: number }
+
+-- Cooked output of ConversionModule.cook (M4, docs/design/cook-verb.md §5). Kept as its own
+-- array rather than folded into `inventory`, mirroring how `agingLocker` is already kept separate
+-- from the spoilage track: a portion starts its own freshness clock at the cut, distinct from the
+-- parent fish's `caughtAt` clock, so it needs its own timestamp field rather than reusing one.
+export type CookedPortion = { id: string, species: string, grade: string, cookedAt: number }
 
 export type AgingFish = { slot: number, species: string, placedAt: number }
 
@@ -43,6 +49,7 @@ export type Meta = {
 export type PlayerData = {
     skills: Skills,
     inventory: { InventoryFish },
+    cookedPortions: { CookedPortion },
     agingLocker: { AgingFish },
     restaurant: Restaurant,
     economy: Economy,
@@ -65,6 +72,7 @@ function PlayerDataSchema.newDefault(): PlayerData
             purchasing = _newSkillEntry(),
         },
         inventory = {},
+        cookedPortions = {},
         agingLocker = {},
         restaurant = {
             tier = 0,
@@ -148,6 +156,7 @@ MIGRATIONS[0] = function(old: any): PlayerData
     return {
         skills = skills,
         inventory = if type(old.inventory) == "table" then old.inventory else defaults.inventory,
+        cookedPortions = if type(old.cookedPortions) == "table" then old.cookedPortions else defaults.cookedPortions,
         agingLocker = if type(old.agingLocker) == "table" then old.agingLocker else defaults.agingLocker,
         restaurant = restaurant,
         economy = economy,
@@ -159,6 +168,15 @@ MIGRATIONS[0] = function(old: any): PlayerData
             lastJoinAt = if type(oldMeta.lastJoinAt) == "number" then oldMeta.lastJoinAt else defaults.meta.lastJoinAt,
         },
     }
+end
+
+-- v1 -> v2 (M4): the only change is the addition of cookedPortions (see the CookedPortion type
+-- comment above) — everything else in a v1 shape already matches v2, so this is a pure addition
+-- exactly as the MIGRATIONS-chain comment above promised.
+MIGRATIONS[1] = function(old: any): PlayerData
+    old.cookedPortions = if type(old.cookedPortions) == "table" then old.cookedPortions else {}
+    old.meta.schemaVersion = 2
+    return old
 end
 
 -- Never silently overwrite (PRD §7.3, §8 DataStore rules): walk the chain from whatever version

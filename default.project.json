@@ -13,7 +13,28 @@
       "Events": {
         "$className": "Folder",
         "RemoteEvents": {
-          "$className": "Folder"
+          "$className": "Folder",
+          "Player_CastLine": {
+            "$className": "RemoteEvent"
+          },
+          "Player_ReelInput": {
+            "$className": "RemoteEvent"
+          },
+          "Fishing_BiteWindow": {
+            "$className": "RemoteEvent"
+          },
+          "Fishing_FightResult": {
+            "$className": "RemoteEvent"
+          },
+          "Player_CookTrace": {
+            "$className": "RemoteEvent"
+          },
+          "Player_CookStroke": {
+            "$className": "RemoteEvent"
+          },
+          "Cooking_PortionsResolved": {
+            "$className": "RemoteEvent"
+          }
         },
         "RemoteFunctions": {
           "$className": "Folder"
