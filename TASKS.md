@@ -10,6 +10,7 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | M2 player data backbone | dev-systems | todo (after M1) | — |
 | M0 prep: cook-verb analysis doc | dev-experience | review | `claude/sushi-m0-verb-brief` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | todo | — |
+| Apply M0 PRD edits in the MIMIR vault (§9 of the verb doc), then `scripts/sync-prd.sh` | Giahy | todo | — |
 
 ## Modules
 
@@ -41,7 +42,8 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 
 | Item | Blocks |
 |---|---|
-| M0 cook-verb grill-me session | M3+, the whole vertical slice |
+| ~~M0 cook-verb grill-me session~~ — done 2026-07-29 | ~~M3+, the whole vertical slice~~ |
+| Apply the M0 PRD edits vault-side (`docs/design/cook-verb.md` §9), then `scripts/sync-prd.sh` | M0 → done; M4/M5/M17 acceptance criteria |
 | Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist + mem0 plugin installed (`/plugin install mem0@mem0-plugins`) | agent memory (tools absent without all three) |
 | Local machine: enable Studio's built-in MCP server + Quick Connect Claude Code (`docs/runbooks/roblox-studio-mcp.md`) | Studio-side verification, playtest evidence for `reviewer-reality` |
 | Branch protection on `main` | process safety |
