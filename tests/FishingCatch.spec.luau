@@ -3,20 +3,20 @@
 -- BUILD_LOG.md M3 entry for what remains a Studio/human playtest concern.
 local FishingCatch = require("../src/server/ServerStorage/Modules/FishingCatch")
 
--- Motion amplitudes are 0 here so this fixture behaves exactly like the pre-2026-08-06 static
--- band (TARGET_CENTER=0.55, TARGET_WIDTH=0.40 => [0.35, 0.75], the old TENSION_TARGET_MIN/MAX) —
+-- Fish motion amplitudes are 0 here so this fixture behaves exactly like the pre-2026-08-06 static
+-- band (FISH_CENTER=0.55, CATCH_BOX_WIDTH=0.40 => [0.35, 0.75], the old TENSION_TARGET_MIN/MAX) —
 -- every fight-simulation test below was written against that static band and stays meaningful
--- unchanged. Motion itself is covered separately by the targetCenterAt/isInBand tests below.
+-- unchanged. Motion itself is covered separately by the fishPositionAt/isInBand tests below.
 local FIGHT_CONFIG = {
     HOOK_REACTION_WINDOW_SECONDS = 1.2,
     FIGHT_DURATION_SECONDS = 12.0,
-    TARGET_CENTER = 0.55,
-    TARGET_WIDTH = 0.40,
-    TARGET_MOTION_AMPLITUDE_1 = 0,
-    TARGET_MOTION_FREQUENCY_1 = 0.9,
-    TARGET_MOTION_AMPLITUDE_2 = 0,
-    TARGET_MOTION_FREQUENCY_2 = 2.3,
-    TARGET_MOTION_PHASE_2 = 1.7,
+    FISH_CENTER = 0.55,
+    CATCH_BOX_WIDTH = 0.40,
+    FISH_MOTION_AMPLITUDE_1 = 0,
+    FISH_MOTION_FREQUENCY_1 = 0.9,
+    FISH_MOTION_AMPLITUDE_2 = 0,
+    FISH_MOTION_FREQUENCY_2 = 2.3,
+    FISH_MOTION_PHASE_2 = 1.7,
     TENSION_SNAP_THRESHOLD = 0.95,
     PROGRESS_GAIN_PER_SECOND_IN_BAND = 0.20,
     PROGRESS_DECAY_PER_SECOND_OUT_OF_BAND = 0.08,
@@ -195,68 +195,70 @@ do
     print("FishingCatch.spec: applyReelInput out-of-band decay without failure OK")
 end
 
--- targetCenterAt: deterministic Stardew Valley-style moving catch zone (2026-08-06, replaces the
--- static band). Must start at TARGET_CENTER exactly (both sines are 0 at t=0), stay bounded on
--- the bar always, and actually move over time rather than sitting static.
+-- fishPositionAt: deterministic Stardew Valley-style fish drift (2026-08-06, corrects the first
+-- moving-target pass which had the fish and the player-controlled box backwards). Must start at
+-- FISH_CENTER exactly when PHASE_2=0 (both sines are 0 at t=0), stay bounded on the bar always,
+-- and actually move over time rather than sitting static.
 do
     local motionConfig = {
-        TARGET_CENTER = 0.5,
-        TARGET_WIDTH = 0.22,
-        TARGET_MOTION_AMPLITUDE_1 = 0.28,
-        TARGET_MOTION_FREQUENCY_1 = 0.9,
-        TARGET_MOTION_AMPLITUDE_2 = 0.14,
-        TARGET_MOTION_FREQUENCY_2 = 2.3,
-        TARGET_MOTION_PHASE_2 = 1.7,
+        FISH_CENTER = 0.5,
+        CATCH_BOX_WIDTH = 0.22,
+        FISH_MOTION_AMPLITUDE_1 = 0.28,
+        FISH_MOTION_FREQUENCY_1 = 0.9,
+        FISH_MOTION_AMPLITUDE_2 = 0.14,
+        FISH_MOTION_FREQUENCY_2 = 2.3,
+        FISH_MOTION_PHASE_2 = 1.7,
     }
 
     -- Independently re-derive the formula's expected value at t=0 (PHASE_2 is nonzero, so the
-    -- second sine term is NOT 0 here — only checking "it equals TARGET_CENTER" would be wrong).
+    -- second sine term is NOT 0 here — only checking "it equals FISH_CENTER" would be wrong).
     local expectedAtZero = 0.5 + 0.28 * math.sin(0) + 0.14 * math.sin(1.7)
     assert(
-        math.abs(FishingCatch.targetCenterAt(0, motionConfig) - expectedAtZero) < 1e-9,
-        "targetCenterAt(0, ...) must match the documented formula exactly"
+        math.abs(FishingCatch.fishPositionAt(0, motionConfig) - expectedAtZero) < 1e-9,
+        "fishPositionAt(0, ...) must match the documented formula exactly"
     )
 
     local zeroPhaseConfig = {
-        TARGET_CENTER = 0.5,
-        TARGET_WIDTH = 0.22,
-        TARGET_MOTION_AMPLITUDE_1 = 0.28,
-        TARGET_MOTION_FREQUENCY_1 = 0.9,
-        TARGET_MOTION_AMPLITUDE_2 = 0.14,
-        TARGET_MOTION_FREQUENCY_2 = 2.3,
-        TARGET_MOTION_PHASE_2 = 0,
+        FISH_CENTER = 0.5,
+        CATCH_BOX_WIDTH = 0.22,
+        FISH_MOTION_AMPLITUDE_1 = 0.28,
+        FISH_MOTION_FREQUENCY_1 = 0.9,
+        FISH_MOTION_AMPLITUDE_2 = 0.14,
+        FISH_MOTION_FREQUENCY_2 = 2.3,
+        FISH_MOTION_PHASE_2 = 0,
     }
     assert(
-        FishingCatch.targetCenterAt(0, zeroPhaseConfig) == 0.5,
-        "with PHASE_2 = 0, both sine terms are 0 at elapsed=0, so the target must sit exactly at TARGET_CENTER"
+        FishingCatch.fishPositionAt(0, zeroPhaseConfig) == 0.5,
+        "with PHASE_2 = 0, both sine terms are 0 at elapsed=0, so the fish must sit exactly at FISH_CENTER"
     )
 
-    local halfWidth = motionConfig.TARGET_WIDTH / 2
+    local halfWidth = motionConfig.CATCH_BOX_WIDTH / 2
     local t = 0
     while t <= 20 do
-        local center = FishingCatch.targetCenterAt(t, motionConfig)
+        local position = FishingCatch.fishPositionAt(t, motionConfig)
         assert(
-            center >= halfWidth - 1e-9 and center <= 1 - halfWidth + 1e-9,
-            "the target zone must always stay fully within [0, 1], got center="
-                .. tostring(center)
+            position >= halfWidth - 1e-9 and position <= 1 - halfWidth + 1e-9,
+            "the fish must always stay fully within [0, 1], got position="
+                .. tostring(position)
                 .. " at t="
                 .. tostring(t)
         )
         t += 0.37
     end
 
-    local center1 = FishingCatch.targetCenterAt(1.0, motionConfig)
-    local center2 = FishingCatch.targetCenterAt(2.0, motionConfig)
-    assert(center1 ~= center2, "the target must actually move between two different elapsed times, not sit static")
-    print("FishingCatch.spec: targetCenterAt bounded + moving OK")
+    local position1 = FishingCatch.fishPositionAt(1.0, motionConfig)
+    local position2 = FishingCatch.fishPositionAt(2.0, motionConfig)
+    assert(position1 ~= position2, "the fish must actually move between two different elapsed times, not sit static")
+    print("FishingCatch.spec: fishPositionAt bounded + moving OK")
 end
 
--- isInBand: inclusive-range check against a (possibly moving) center — the same check
--- applyReelInput now runs every tick with a fresh targetCenterAt() result.
+-- isInBand: inclusive-range check, symmetric regardless of which argument is "the fish" and which
+-- is "the player's box center" — the same check applyReelInput now runs every tick against a
+-- fresh fishPositionAt() result and the player's current tension.
 do
-    assert(FishingCatch.isInBand(0.5, 0.5, 0.2) == true, "tension exactly at center must be in band")
-    assert(FishingCatch.isInBand(0.6, 0.5, 0.2) == true, "tension at the edge of the band must be in band (inclusive)")
-    assert(FishingCatch.isInBand(0.61, 0.5, 0.2) == false, "tension just outside the band must not be in band")
+    assert(FishingCatch.isInBand(0.5, 0.5, 0.2) == true, "fish exactly at the box center must be in band")
+    assert(FishingCatch.isInBand(0.6, 0.5, 0.2) == true, "fish at the edge of the box must be in band (inclusive)")
+    assert(FishingCatch.isInBand(0.61, 0.5, 0.2) == false, "fish just outside the box must not be in band")
     print("FishingCatch.spec: isInBand OK")
 end
 
