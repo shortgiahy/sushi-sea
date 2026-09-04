@@ -175,8 +175,10 @@ do
     print("PlayerDataSchema.spec: v2 -> current migration (storage addition + later steps) OK")
 end
 
--- v3 -> v4 (M11): a real schema-v3 save (staffHeadcount still present, no staff roster) must drop
--- staffHeadcount and gain an empty staff array, without disturbing any v3 field.
+-- v3 -> current (M11's step, then whatever runs after it): a real schema-v3 save (staffHeadcount
+-- still present, no staff roster) must drop staffHeadcount and gain an empty staff array, without
+-- disturbing any v3 field. Asserts against the dynamic current version for the same reason the v1
+-- test above does.
 do
     local v3Save = {
         skills = {
@@ -197,17 +199,61 @@ do
 
     local migrated = PlayerDataSchema.migrate(v3Save)
 
-    assert(migrated.meta.schemaVersion == 4, "a v3 save must migrate forward to schemaVersion 4")
+    assert(
+        migrated.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
+        "a v3 save must migrate all the way forward to the current schemaVersion"
+    )
     assert(migrated.restaurant.staffHeadcount == nil, "a v3 save's staffHeadcount must be dropped, not converted")
     assert(
         type(migrated.restaurant.staff) == "table" and #migrated.restaurant.staff == 0,
         "a v3 save must gain an empty staff roster, not synthetic entries for its old headcount"
     )
-    assert(migrated.restaurant.tier == 1, "v3 -> v4 migration must not disturb existing restaurant.tier")
-    assert(migrated.restaurant.prestigePoints == 5, "v3 -> v4 migration must not disturb existing prestigePoints")
-    assert(migrated.storage.tier == 1, "v3 -> v4 migration must not disturb existing storage.tier")
-    assert(migrated.economy.gold == 4200, "v3 -> v4 migration must not disturb existing economy data")
-    print("PlayerDataSchema.spec: v3 -> v4 migration (staff roster replaces staffHeadcount) OK")
+    assert(
+        type(migrated.agingLockerEquipment) == "table" and migrated.agingLockerEquipment.tier == 0,
+        "a v3 save must also pick up agingLockerEquipment defaulted by the later v4 -> v5 step"
+    )
+    assert(migrated.restaurant.tier == 1, "v3 -> current migration must not disturb existing restaurant.tier")
+    assert(migrated.restaurant.prestigePoints == 5, "v3 -> current migration must not disturb existing prestigePoints")
+    assert(migrated.storage.tier == 1, "v3 -> current migration must not disturb existing storage.tier")
+    assert(migrated.economy.gold == 4200, "v3 -> current migration must not disturb existing economy data")
+    print("PlayerDataSchema.spec: v3 -> current migration (staff roster replaces staffHeadcount + later steps) OK")
+end
+
+-- v4 -> v5 (M15): a real schema-v4 save (no agingLockerEquipment field at all, predating its
+-- addition) must gain a default tier of 0 and land on v5, without disturbing any v4 field.
+do
+    local v4Save = {
+        skills = {
+            fishing = { level = 7, xp = 300 },
+            cooking = { level = 6, xp = 150 },
+            sailing = { level = 1, xp = 0 },
+            hospitality = { level = 1, xp = 0 },
+            purchasing = { level = 1, xp = 0 },
+        },
+        inventory = { { id = "uuid-4", species = "opah", caughtAt = 1718003000 } },
+        cookedPortions = {},
+        agingLocker = {},
+        restaurant = { tier = 2, staff = {}, prestigePoints = 10, trophies = {} },
+        storage = { tier = 2 },
+        economy = { gold = 8000, offlineSnapshotAt = 0, offlineStockCount = 0, tutorialLoanOwed = 0 },
+        meta = { schemaVersion = 4, firstJoinAt = 1717999000, lastJoinAt = 1718000000 },
+    }
+
+    local migrated = PlayerDataSchema.migrate(v4Save)
+
+    assert(migrated.meta.schemaVersion == 5, "a v4 save must migrate forward to schemaVersion 5")
+    assert(
+        type(migrated.agingLockerEquipment) == "table" and migrated.agingLockerEquipment.tier == 0,
+        "a v4 save must gain a default agingLockerEquipment.tier of 0"
+    )
+    assert(migrated.restaurant.tier == 2, "v4 -> v5 migration must not disturb existing restaurant.tier")
+    assert(migrated.storage.tier == 2, "v4 -> v5 migration must not disturb existing storage.tier")
+    assert(migrated.economy.gold == 8000, "v4 -> v5 migration must not disturb existing economy data")
+    assert(
+        #migrated.inventory == 1 and migrated.inventory[1].id == "uuid-4",
+        "v4 -> v5 migration must not disturb existing inventory"
+    )
+    print("PlayerDataSchema.spec: v4 -> v5 migration (agingLockerEquipment addition) OK")
 end
 
 -- Already-current data must pass through the chain without being altered or re-defaulted.

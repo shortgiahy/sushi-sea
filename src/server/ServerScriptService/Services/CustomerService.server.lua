@@ -88,6 +88,7 @@ local function _resolveNextPlate(data: any): number
         cutBase = cutBase,
         cookingLevel = data.skills.cooking.level,
         freshnessElapsedSeconds = freshnessElapsedSeconds,
+        dryAgeMutation = portion.dryAgeMutation,
     }, PLATE_VALUE_TUNING)
 
     return plateValue

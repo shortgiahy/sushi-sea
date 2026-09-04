@@ -11,6 +11,12 @@
 -- — this panel is already the inventory-side HUD, so the capacity/tier readout belongs here rather
 -- than a separate storefront; ShopUI.lua's fuller "Purchasing skill storefront" is a bigger, later
 -- system covering rods/boats/equipment, not just this one number.
+--
+-- M15 addition: a read-only "Aging Locker: n/slots" line (Aging_LockerUpdate) — place/pull/upgrade
+-- actions are server-complete (Player_PlaceInAgingLocker/Player_PullFromLocker/
+-- Player_PurchaseAgingLockerTier) but have no interactive UI yet; this panel's inventory rows are a
+-- flat read-only list with no per-row action slots to attach a "place in locker" button to. Same
+-- "mechanic ships, full interaction UI is a later pass" precedent M9's offline bank set.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -28,6 +34,7 @@ local inventoryContainer: Frame? = nil
 local portionsContainer: Frame? = nil
 local storageLabel: TextLabel? = nil
 local upgradeButton: TextButton? = nil
+local agingLockerLabel: TextLabel? = nil
 local purchaseStorageTierRemote: RemoteEvent? = nil
 
 local storageTierState = { tier = 0, name = "Boat cooler", capacity = 10, nextTierCost = 500 :: number? }
@@ -66,7 +73,7 @@ local function _buildGui(): ()
     local root = Instance.new("Frame")
     root.Name = "Root"
     root.Position = UDim2.fromOffset(16, 16)
-    root.Size = UDim2.fromOffset(220, 330)
+    root.Size = UDim2.fromOffset(220, 356)
     root.BackgroundTransparency = 1
     root.Parent = screenGui
 
@@ -150,6 +157,18 @@ local function _buildGui(): ()
     upgrade.Text = ""
     upgrade.Parent = root
 
+    local aging = Instance.new("TextLabel")
+    aging.Name = "AgingLocker"
+    aging.Position = UDim2.fromOffset(0, 320)
+    aging.Size = UDim2.new(1, 0, 0, 18)
+    aging.BackgroundTransparency = 1
+    aging.TextColor3 = Color3.fromRGB(200, 170, 230)
+    aging.TextXAlignment = Enum.TextXAlignment.Left
+    aging.Font = Enum.Font.SourceSans
+    aging.TextSize = 15
+    aging.Text = ""
+    aging.Parent = root
+
     screenGui.Parent = playerGui
 
     goldLabel = gold
@@ -157,6 +176,7 @@ local function _buildGui(): ()
     portionsContainer = portContainer
     storageLabel = storage
     upgradeButton = upgrade
+    agingLockerLabel = aging
 end
 
 type InventorySnapshotEntry = { id: string, species: string, freshnessState: string, freshnessFraction: number }
@@ -229,6 +249,19 @@ local function _onStorageTierUpdate(payload: StorageTierUpdate): ()
     _refreshStorageDisplay()
 end
 
+type AgingLockerUpdate = { tier: number, slots: number, nextTierCost: number?, locker: { any } }
+
+local function _onAgingLockerUpdate(payload: AgingLockerUpdate): ()
+    if not agingLockerLabel then
+        return
+    end
+    if payload.tier <= 0 then
+        agingLockerLabel.Text = "Aging Locker: none"
+    else
+        agingLockerLabel.Text = ("Aging Locker: %d/%d"):format(#payload.locker, payload.slots)
+    end
+end
+
 local function _onUpgradeButtonPressed(): ()
     if purchaseStorageTierRemote then
         purchaseStorageTierRemote:FireServer()
@@ -240,6 +273,7 @@ function FreshnessUI.init(): ()
     local inventoryUpdateRemote = remoteEvents:WaitForChild("Spoilage_InventoryUpdate") :: RemoteEvent
     local goldUpdateRemote = remoteEvents:WaitForChild("Economy_GoldUpdate") :: RemoteEvent
     local storageTierUpdateRemote = remoteEvents:WaitForChild("Storage_TierUpdate") :: RemoteEvent
+    local agingLockerUpdateRemote = remoteEvents:WaitForChild("Aging_LockerUpdate") :: RemoteEvent
     purchaseStorageTierRemote = remoteEvents:WaitForChild("Player_PurchaseStorageTier") :: RemoteEvent
 
     _buildGui()
@@ -248,6 +282,7 @@ function FreshnessUI.init(): ()
     inventoryUpdateRemote.OnClientEvent:Connect(_onInventoryUpdate)
     goldUpdateRemote.OnClientEvent:Connect(_onGoldUpdate)
     storageTierUpdateRemote.OnClientEvent:Connect(_onStorageTierUpdate)
+    agingLockerUpdateRemote.OnClientEvent:Connect(_onAgingLockerUpdate)
 
     if upgradeButton then
         upgradeButton.Activated:Connect(_onUpgradeButtonPressed)

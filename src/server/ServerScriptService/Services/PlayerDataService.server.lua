@@ -9,6 +9,7 @@ local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local OfflineBankCalculator = require(ServerStorage.Modules.OfflineBankCalculator)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
+local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
 
 -- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
 -- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
@@ -23,6 +24,10 @@ local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEven
 -- only known here, right after load.
 local restaurantTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TierUpdate
 local staffUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_StaffUpdate
+
+-- M15 addition: same reasoning — a freshly loaded player's aging locker tier/contents are only
+-- known here, right after load.
+local agingLockerUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Aging_LockerUpdate
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -114,6 +119,19 @@ Players.PlayerAdded:Connect(function(player: Player)
         table.insert(roster, { id = staff.id, rarity = staff.rarity, hiredAt = staff.hiredAt })
     end
     staffUpdateRemote:FireClient(player, { roster = roster })
+
+    local agingTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    local nextAgingTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier + 1]
+    local locker = {}
+    for _, fish in data.agingLocker do
+        table.insert(locker, { slot = fish.slot, species = fish.species, placedAt = fish.placedAt })
+    end
+    agingLockerUpdateRemote:FireClient(player, {
+        tier = data.agingLockerEquipment.tier,
+        slots = if agingTierData then agingTierData.slots else 0,
+        nextTierCost = if nextAgingTierData then nextAgingTierData.upgradeCost else nil,
+        locker = locker,
+    })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)

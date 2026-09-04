@@ -132,12 +132,15 @@ local function _autoCook(data: any, staffMember: any, now: number): ()
         CookConfig
     )
 
+    -- M15: carries a pulled-from-locker fish's dryAgeMutation forward onto its portions, same as
+    -- EconomyService._resolveCook does for the manual cook verb.
     for _, portion in portions do
         table.insert(data.cookedPortions, {
             id = HttpService:GenerateGUID(false),
             species = fish.species,
             grade = portion.grade,
             cookedAt = now,
+            dryAgeMutation = fish.dryAgeMutation,
         })
     end
 end

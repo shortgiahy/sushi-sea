@@ -1,7 +1,7 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 4
+local SCHEMA_VERSION = 5
 local TUTORIAL_LOAN_DEFAULT = 500
 
 export type SkillEntry = { level: number, xp: number }
@@ -14,13 +14,19 @@ export type Skills = {
     purchasing: SkillEntry,
 }
 
-export type InventoryFish = { id: string, species: string, caughtAt: number }
+-- `dryAgeMutation` (M15, PRD §4 "Dry aging"): nil for an ordinarily-caught fish; set to the
+-- resolved multiplier (aging curve × rare mutation roll, DryAgingLocker.lua) only when this entry
+-- was just pulled from the aging locker (Player_PullFromLocker) back into raw inventory. Carried
+-- forward onto the CookedPortion it produces so PlateValueResolver's existing optional
+-- `dryAgeMutation` input (M5) finally receives a real value instead of always defaulting to
+-- DRY_AGE_MUTATION_BASELINE.
+export type InventoryFish = { id: string, species: string, caughtAt: number, dryAgeMutation: number? }
 
 -- Cooked output of ConversionModule.cook (M4, docs/design/cook-verb.md §5). Kept as its own
 -- array rather than folded into `inventory`, mirroring how `agingLocker` is already kept separate
 -- from the spoilage track: a portion starts its own freshness clock at the cut, distinct from the
 -- parent fish's `caughtAt` clock, so it needs its own timestamp field rather than reusing one.
-export type CookedPortion = { id: string, species: string, grade: string, cookedAt: number }
+export type CookedPortion = { id: string, species: string, grade: string, cookedAt: number, dryAgeMutation: number? }
 
 export type AgingFish = { slot: number, species: string, placedAt: number }
 
@@ -48,6 +54,13 @@ export type Storage = {
     tier: number,
 }
 
+-- Dry-aging locker equipment tier (M15, PRD §4: "opt-in, equipment-gated, limited capacity") —
+-- yet another distinct Purchasing category from `storage.tier`/`restaurant.tier`. `tier` indexes
+-- AgingConfig.LOCKER_TIERS; 0 means no locker purchased yet (agingLocker must stay empty).
+export type AgingLockerEquipment = {
+    tier: number,
+}
+
 export type Economy = {
     gold: number,
     offlineSnapshotAt: number,
@@ -66,6 +79,7 @@ export type PlayerData = {
     inventory: { InventoryFish },
     cookedPortions: { CookedPortion },
     agingLocker: { AgingFish },
+    agingLockerEquipment: AgingLockerEquipment,
     restaurant: Restaurant,
     storage: Storage,
     economy: Economy,
@@ -90,6 +104,9 @@ function PlayerDataSchema.newDefault(): PlayerData
         inventory = {},
         cookedPortions = {},
         agingLocker = {},
+        agingLockerEquipment = {
+            tier = 0,
+        },
         restaurant = {
             tier = 0,
             staff = {},
@@ -217,6 +234,20 @@ MIGRATIONS[3] = function(old: any): PlayerData
     old.restaurant.staffHeadcount = nil
     old.restaurant.staff = if type(old.restaurant.staff) == "table" then old.restaurant.staff else {}
     old.meta.schemaVersion = 4
+    return old
+end
+
+-- v4 -> v5 (M15): adds `agingLockerEquipment` (see its type comment above) — a pure addition, same
+-- shape as v2 -> v3's `storage` arrival. `inventory`/`cookedPortions` entries don't need a
+-- migration step for their new optional `dryAgeMutation` field — it's nil-safe by construction
+-- (every reader already treats a missing/nil value as "no mutation," PlateValueResolver's existing
+-- baseline-default behavior from M5).
+MIGRATIONS[4] = function(old: any): PlayerData
+    local oldAgingLockerEquipment = if type(old.agingLockerEquipment) == "table" then old.agingLockerEquipment else {}
+    old.agingLockerEquipment = {
+        tier = if type(oldAgingLockerEquipment.tier) == "number" then oldAgingLockerEquipment.tier else 0,
+    }
+    old.meta.schemaVersion = 5
     return old
 end
 

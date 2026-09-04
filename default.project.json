@@ -73,6 +73,18 @@
           },
           "Fishing_LegendaryPhaseAdvanced": {
             "$className": "RemoteEvent"
+          },
+          "Player_PlaceInAgingLocker": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PullFromLocker": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PurchaseAgingLockerTier": {
+            "$className": "RemoteEvent"
+          },
+          "Aging_LockerUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

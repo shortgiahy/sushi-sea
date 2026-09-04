@@ -38,10 +38,12 @@ local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local WeatherAccess = require(ServerStorage.Modules.WeatherAccess)
 local WeatherRoll = require(ServerStorage.Modules.WeatherRoll)
 local LegendaryFight = require(ServerStorage.Modules.LegendaryFight)
+local DryAgingLocker = require(ServerStorage.Modules.DryAgingLocker)
 local FishingConfig = require(ReplicatedStorage.Config.FishingConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 local WeatherConfig = require(ReplicatedStorage.Config.WeatherConfig)
+local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
 local FishSpecies = require(ReplicatedStorage.Modules.FishSpecies)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
@@ -58,6 +60,10 @@ local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
 local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
 local purchaseStorageTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseStorageTier
 local storageTierUpdateRemote: RemoteEvent = RemoteEvents.Storage_TierUpdate
+local placeInAgingLockerRemote: RemoteEvent = RemoteEvents.Player_PlaceInAgingLocker
+local pullFromLockerRemote: RemoteEvent = RemoteEvents.Player_PullFromLocker
+local purchaseAgingLockerTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseAgingLockerTier
+local agingLockerUpdateRemote: RemoteEvent = RemoteEvents.Aging_LockerUpdate
 
 local LEGENDARY_TUNING: LegendaryFight.LegendaryTuning = {
     PHASE_COUNT = WeatherConfig.LEGENDARY_PHASE_COUNT,
@@ -66,6 +72,14 @@ local LEGENDARY_TUNING: LegendaryFight.LegendaryTuning = {
     LEVEL_RELIEF_PER_LEVEL = WeatherConfig.LEGENDARY_LEVEL_RELIEF_PER_LEVEL,
     MAX_LEVEL_RELIEF = WeatherConfig.LEGENDARY_MAX_LEVEL_RELIEF,
     MAX_FISHING_LEVEL_FOR_RELIEF = WeatherConfig.LEGENDARY_MAX_FISHING_LEVEL_FOR_RELIEF,
+}
+
+local AGING_TUNING: DryAgingLocker.AgingTuning = {
+    PEAK_MULTIPLIER = AgingConfig.PEAK_MULTIPLIER,
+    PEAK_SECONDS = AgingConfig.PEAK_SECONDS,
+    MUTATION_CHANCE = AgingConfig.MUTATION_CHANCE,
+    MIN_MUTATION_BONUS = AgingConfig.MIN_MUTATION_BONUS,
+    MAX_MUTATION_BONUS = AgingConfig.MAX_MUTATION_BONUS,
 }
 
 -- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
@@ -473,6 +487,10 @@ local function _resolveCook(player: Player, data: any, fish: any, traceAccuracy:
     -- grade) so BoatCookController can later name a specific portion in Player_ServePlate — the
     -- serve verb resolves one cookedPortions entry at a time, the same shape as _onCookStroke
     -- addressing one loin at a time.
+    -- M15: `fish.dryAgeMutation` is only set when this fish was just pulled from the aging locker
+    -- (see _onPullFromLocker) — carried forward onto every resulting portion so
+    -- PlateValueResolver.resolve sees it at serve time. nil for an ordinarily-caught fish, same as
+    -- before this addition.
     local now = os.time()
     local resolvedPortions: { { id: string, grade: string } } = {}
     for _, portion in portions do
@@ -481,6 +499,7 @@ local function _resolveCook(player: Player, data: any, fish: any, traceAccuracy:
             species = fish.species,
             grade = portion.grade,
             cookedAt = now,
+            dryAgeMutation = fish.dryAgeMutation,
         }
         table.insert(data.cookedPortions, cookedPortion)
         table.insert(resolvedPortions, { id = cookedPortion.id, grade = cookedPortion.grade })
@@ -654,6 +673,7 @@ local function _onServePlate(player: Player, payload: any): ()
         cutBase = cutBase,
         cookingLevel = data.skills.cooking.level,
         freshnessElapsedSeconds = freshnessElapsedSeconds,
+        dryAgeMutation = portion.dryAgeMutation,
     }, PLATE_VALUE_TUNING)
 
     table.remove(data.cookedPortions, portionIndex)
@@ -696,11 +716,143 @@ local function _onPurchaseStorageTier(player: Player): ()
     })
 end
 
+local function _pushAgingLockerUpdate(player: Player, data: any): ()
+    local tierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    local nextTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier + 1]
+    local locker = {}
+    for _, fish in data.agingLocker do
+        table.insert(locker, { slot = fish.slot, species = fish.species, placedAt = fish.placedAt })
+    end
+    agingLockerUpdateRemote:FireClient(player, {
+        tier = data.agingLockerEquipment.tier,
+        slots = if tierData then tierData.slots else 0,
+        nextTierCost = if nextTierData then nextTierData.upgradeCost else nil,
+        locker = locker,
+    })
+end
+
+-- Aging locker equipment purchase (M15). Same "lives alongside the existing verb-input validation
+-- rather than inventing an unlisted service file" reasoning as the storage tier purchase above —
+-- yet another distinct Purchasing category, so it sits next to that one.
+local function _onPurchaseAgingLockerTier(player: Player): ()
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local nextTier = data.agingLockerEquipment.tier + 1
+    local tierData = AgingConfig.LOCKER_TIERS[nextTier]
+    if not tierData then
+        return -- already at AgingConfig.MAX_LOCKER_TIER — expected-failure path, not an error
+    end
+    if data.economy.gold < tierData.upgradeCost then
+        return
+    end
+
+    data.economy.gold -= tierData.upgradeCost
+    data.agingLockerEquipment.tier = nextTier
+
+    goldUpdateRemote:FireClient(player, data.economy.gold)
+    _pushAgingLockerUpdate(player, data)
+end
+
+-- Place a raw fish on the aging track (M15, PRD §4: "leaves the spoilage track and enters the
+-- aging track"). Slot numbers are the lowest unused integer in [1, tierData.slots] — reused once
+-- freed, not a monotonically increasing counter, so a full-then-partially-emptied locker doesn't
+-- run out of representable slot numbers.
+local function _onPlaceInAgingLocker(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    if type(fishId) ~= "string" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local tierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    if not tierData or #data.agingLocker >= tierData.slots then
+        return -- no locker owned yet, or it's full — expected-failure path, not an error
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in data.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local usedSlots = {}
+    for _, entry in data.agingLocker do
+        usedSlots[entry.slot] = true
+    end
+    local slot = 1
+    while usedSlots[slot] do
+        slot += 1
+    end
+
+    table.remove(data.inventory, fishIndex)
+    table.insert(data.agingLocker, { slot = slot, species = fish.species, placedAt = os.time() })
+
+    _pushAgingLockerUpdate(player, data)
+end
+
+-- Pull a fish back off the aging track (M15, PRD §7.2 `Player_PullFromLocker — {slot}`): resolves
+-- the aging multiplier + rare mutation roll once, here, and stamps it onto the fish as it re-enters
+-- raw inventory — re-entering the spoilage track with a fresh `caughtAt`, since it left that track
+-- entirely while aging (PRD §4) rather than having spoiled invisibly the whole time.
+local function _onPullFromLocker(player: Player, payload: any): ()
+    local slot = if typeof(payload) == "table" then payload.slot else nil
+    if type(slot) ~= "number" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local lockerIndex, agingFish = nil, nil
+    for i, entry in data.agingLocker do
+        if entry.slot == slot then
+            lockerIndex, agingFish = i, entry
+            break
+        end
+    end
+    if not agingFish then
+        return -- empty slot, or never existed — expected-failure path, not an error
+    end
+
+    local agedSeconds = math.max(os.time() - agingFish.placedAt, 0)
+    local dryAgeMutation = DryAgingLocker.resolveDryAgeMutation(agedSeconds, AGING_TUNING)
+
+    table.remove(data.agingLocker, lockerIndex)
+    table.insert(data.inventory, {
+        id = HttpService:GenerateGUID(false),
+        species = agingFish.species,
+        caughtAt = os.time(),
+        dryAgeMutation = dryAgeMutation,
+    })
+
+    _pushAgingLockerUpdate(player, data)
+end
+
 castLineRemote.OnServerEvent:Connect(_onCastLine)
 reelInputRemote.OnServerEvent:Connect(_onReelInput)
 cookTraceRemote.OnServerEvent:Connect(_onCookTrace)
 cookStrokeRemote.OnServerEvent:Connect(_onCookStroke)
 purchaseStorageTierRemote.OnServerEvent:Connect(_onPurchaseStorageTier)
+purchaseAgingLockerTierRemote.OnServerEvent:Connect(_onPurchaseAgingLockerTier)
+placeInAgingLockerRemote.OnServerEvent:Connect(_onPlaceInAgingLocker)
+pullFromLockerRemote.OnServerEvent:Connect(_onPullFromLocker)
 servePlateRemote.OnServerEvent:Connect(_onServePlate)
 
 Players.PlayerRemoving:Connect(function(player: Player)
