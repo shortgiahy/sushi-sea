@@ -38,6 +38,22 @@
 --   Hospitality's level the same way CookConfig.MAX_COOKING_LEVEL_FOR_EXTRACTION normalizes
 --   Cooking — also inert today since no XP/leveling system exists yet (SkillConfig.lua is still
 --   an empty stub), so Hospitality sits at level 1 for every player.
+--
+-- M17 scope reasoning (PRD §4: "the player's presence applies a quality (and speed) aura to
+-- nearby staff... needs a shape that rewards visiting rather than parking"):
+-- - No world/restaurant geometry exists (confirmed at M13 — no Workspace mapping, no boat/room
+--   Parts committed anywhere), so "presence" can't be a real proximity check. The proxy here is
+--   "currently in a play session" — the aura is strongest right after joining and decays with an
+--   exponential half-life the longer a single continuous session runs, resetting to full strength
+--   on the next join. This directly implements PRD's own proposed shape ("diminishing over a
+--   session") without inventing location tracking a boat-only gray-box has no geometry to support.
+-- - Only affects STAFF performance (PRD: "applies... to nearby staff"), never the player's own
+--   manual cook verb — the player manually cooking already IS their own hand skill, no aura needed.
+-- - Only the "quality" half of "quality (and speed)" is implemented — PRESENCE_BASE_MULTIPLIER
+--   scales StaffPerformance's output before ConversionModule.cook. A "speed" implementation (more
+--   auto-cooks per tick) would need its own throughput model on top of StaffService's existing
+--   "one fish per staff per tick" loop; deferred as an explicitly flagged gap, not silently
+--   dropped, rather than inventing a second mechanic for a first pass.
 local RestaurantConfig = {}
 
 RestaurantConfig.RESTAURANT_TIERS = {
@@ -75,5 +91,9 @@ RestaurantConfig.COSMETICS_WEIGHT = 0.3
 RestaurantConfig.MAX_HOSPITALITY_LEVEL_FOR_TRAFFIC = 10
 RestaurantConfig.MIN_TRAFFIC_MULTIPLIER = 0.5
 RestaurantConfig.MAX_TRAFFIC_MULTIPLIER = 3.0
+
+RestaurantConfig.PRESENCE_BASE_MULTIPLIER = 1.2
+RestaurantConfig.PRESENCE_MIN_MULTIPLIER = 1.0
+RestaurantConfig.PRESENCE_SESSION_DECAY_HALF_LIFE_SECONDS = 20 * 60
 
 return RestaurantConfig

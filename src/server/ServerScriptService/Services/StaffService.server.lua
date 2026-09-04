@@ -14,10 +14,31 @@ local HttpService = game:GetService("HttpService")
 
 local ConversionModule = require(ServerStorage.Modules.ConversionModule)
 local StaffPerformance = require(ServerStorage.Modules.StaffPerformance)
+local PresenceAura = require(ServerStorage.Modules.PresenceAura)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local FishSpecies = require(ReplicatedStorage.Modules.FishSpecies)
 local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
+
+local PRESENCE_TUNING: PresenceAura.PresenceTuning = {
+    BASE_MULTIPLIER = RestaurantConfig.PRESENCE_BASE_MULTIPLIER,
+    MIN_MULTIPLIER = RestaurantConfig.PRESENCE_MIN_MULTIPLIER,
+    SESSION_DECAY_HALF_LIFE_SECONDS = RestaurantConfig.PRESENCE_SESSION_DECAY_HALF_LIFE_SECONDS,
+}
+
+-- M17: "presence" is a play-session proxy (RestaurantConfig.lua's header explains why — no
+-- world/restaurant geometry exists to check real proximity against). Session start resets on
+-- every join, so the aura is back at full strength each time a player returns, and decays the
+-- longer one continuous session runs — "reward visiting, not parking" (PRD §4).
+local presenceSessionStartedAt: { [number]: number } = {}
+
+Players.PlayerAdded:Connect(function(player: Player)
+    presenceSessionStartedAt[player.UserId] = os.time()
+end)
+
+Players.PlayerRemoving:Connect(function(player: Player)
+    presenceSessionStartedAt[player.UserId] = nil
+end)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
 local purchaseRestaurantTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseRestaurantTier
@@ -103,8 +124,11 @@ end
 -- §4's "kitchen throughput is the primary bottleneck"), oldest inventory first, stopping early
 -- once raw stock runs out regardless of remaining staff. Deterministic performance per §4 ("no
 -- per-fish roll") — same ConversionModule.cook call BoatCookController's manual verb makes,
--- just with a synthesized performance table instead of real trace/stroke input.
-local function _autoCook(data: any, staffMember: any, now: number): ()
+-- just with a synthesized performance table instead of real trace/stroke input. M17: the result is
+-- scaled by the owning player's presence aura before being clamped into ConversionModule's [0,1]
+-- performance contract (PlateValueResolver-style clamping already happens downstream in
+-- ConversionModule._clamp01, so an aura pushing performanceScore above 1.0 just ceilings there).
+local function _autoCook(data: any, staffMember: any, now: number, userId: number): ()
     local fish = table.remove(data.inventory, 1)
     if not fish then
         return
@@ -126,8 +150,14 @@ local function _autoCook(data: any, staffMember: any, now: number): ()
     end
 
     local rarityTuning = RestaurantConfig.STAFF_RARITY[staffMember.rarity]
-    local performanceScore =
+    local basePerformanceScore =
         StaffPerformance.resolve(rarityTuning, staffMember.hiredAt, now, RestaurantConfig.TENURE_SECONDS_FOR_FULL_BONUS)
+
+    local sessionStartedAt = presenceSessionStartedAt[userId]
+    local presenceMultiplier = if sessionStartedAt
+        then PresenceAura.multiplierFor(now - sessionStartedAt, PRESENCE_TUNING)
+        else RestaurantConfig.PRESENCE_MIN_MULTIPLIER
+    local performanceScore = basePerformanceScore * presenceMultiplier
 
     local strokeQuality = {}
     for _ = 1, species.loinCount do
@@ -181,7 +211,7 @@ task.spawn(function()
                     if #data.inventory <= 0 then
                         break
                     end
-                    _autoCook(data, staffMember, now)
+                    _autoCook(data, staffMember, now, player.UserId)
                 end
             end
         end
