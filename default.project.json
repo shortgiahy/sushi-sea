@@ -52,6 +52,21 @@
           },
           "Storage_TierUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Player_PurchaseRestaurantTier": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_TierUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_HireStaff": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_StaffUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_CustomerUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

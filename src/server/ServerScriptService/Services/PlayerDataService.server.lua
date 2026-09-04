@@ -8,6 +8,7 @@ local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local OfflineBankCalculator = require(ServerStorage.Modules.OfflineBankCalculator)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
+local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
 
 -- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
 -- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
@@ -17,6 +18,11 @@ local goldUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Econ
 -- M8 addition: same reasoning as goldUpdateRemote — a freshly loaded player's storage tier/
 -- capacity is only known here, right after load.
 local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Storage_TierUpdate
+
+-- M11 addition: same reasoning — a freshly loaded player's restaurant tier and staff roster are
+-- only known here, right after load.
+local restaurantTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TierUpdate
+local staffUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_StaffUpdate
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -55,11 +61,12 @@ end
 local service = PlayerDataService.new(dataStore)
 PlayerDataAccess.setInstance(service)
 
--- M9 addition: PRD §7.4's closed-form offline bank, run once right after load. Only fires when a
--- prior save actually stamped a snapshot (offlineSnapshotAt > 0) — a brand-new player has nothing
--- to reconcile. staffHeadcount is always 0 today (M11 doesn't exist yet), so
--- OfflineBankCalculator.compute always resolves to 0 here — the throughput/plate-value/wage inputs
--- below are inert placeholders until M11 gives them real values, not this session's numbers.
+-- M9 addition, M11 update: PRD §7.4's closed-form offline bank, run once right after load. Only
+-- fires when a prior save actually stamped a snapshot (offlineSnapshotAt > 0) — a brand-new player
+-- has nothing to reconcile. staffHeadcount now reads `#data.restaurant.staff` (M11's real roster),
+-- but throughput/plate-value/wage stay inert placeholders — those numbers still don't exist
+-- (docs/design/economy-model-skeleton.md), so a staffed player nets 0 here same as an unstaffed
+-- one until a later numbers session fills them in.
 local function _creditOfflineBank(data: any): ()
     if data.economy.offlineSnapshotAt <= 0 then
         return
@@ -68,7 +75,7 @@ local function _creditOfflineBank(data: any): ()
     local elapsedSeconds = math.max(os.time() - data.economy.offlineSnapshotAt, 0)
     local netBank = OfflineBankCalculator.compute({
         elapsedSeconds = elapsedSeconds,
-        staffHeadcount = data.restaurant.staffHeadcount,
+        staffHeadcount = #data.restaurant.staff,
         throughputPerHourWhenStaffed = 0,
         avgPlateValueAtLogout = 0,
         remainingStockAfterSpoilage = 0,
@@ -92,6 +99,21 @@ Players.PlayerAdded:Connect(function(player: Player)
         capacity = tierData.capacity,
         nextTierCost = if nextTierData then nextTierData.upgradeCost else nil,
     })
+
+    local restaurantTierData = RestaurantConfig.RESTAURANT_TIERS[data.restaurant.tier]
+    local nextRestaurantTierData = RestaurantConfig.RESTAURANT_TIERS[data.restaurant.tier + 1]
+    restaurantTierUpdateRemote:FireClient(player, {
+        tier = data.restaurant.tier,
+        name = if restaurantTierData then restaurantTierData.name else nil,
+        seats = if restaurantTierData then restaurantTierData.seats else 0,
+        nextTierCost = if nextRestaurantTierData then nextRestaurantTierData.upgradeCost else nil,
+    })
+
+    local roster = {}
+    for _, staff in data.restaurant.staff do
+        table.insert(roster, { id = staff.id, rarity = staff.rarity, hiredAt = staff.hiredAt })
+    end
+    staffUpdateRemote:FireClient(player, { roster = roster })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)

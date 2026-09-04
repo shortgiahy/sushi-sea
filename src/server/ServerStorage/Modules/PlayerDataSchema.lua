@@ -1,7 +1,7 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 3
+local SCHEMA_VERSION = 4
 local TUTORIAL_LOAN_DEFAULT = 500
 
 export type SkillEntry = { level: number, xp: number }
@@ -26,9 +26,16 @@ export type AgingFish = { slot: number, species: string, placedAt: number }
 
 export type Trophy = { species: string, mountedAt: number }
 
+-- Hired NPC staff (M11, PRD §4 "Staff"). `rarity` indexes RestaurantConfig.STAFF_RARITY, which
+-- caps quality by tier per §4 ("staff cooking quality is capped by tier, not by the player").
+-- `hiredAt` drives the tenure-based accuracy bonus ("the longer you keep them"). Headcount is
+-- `#staff`, not a separately-stored counter — one source of truth, same reasoning `storage.tier`
+-- already applies to keep spoilage-multiplier lookups from a single field.
+export type StaffMember = { id: string, rarity: string, hiredAt: number }
+
 export type Restaurant = {
     tier: number,
-    staffHeadcount: number,
+    staff: { StaffMember },
     prestigePoints: number,
     trophies: { Trophy },
 }
@@ -85,7 +92,7 @@ function PlayerDataSchema.newDefault(): PlayerData
         agingLocker = {},
         restaurant = {
             tier = 0,
-            staffHeadcount = 0,
+            staff = {},
             prestigePoints = 0,
             trophies = {},
         },
@@ -135,12 +142,11 @@ MIGRATIONS[0] = function(old: any): PlayerData
         purchasing = _mergeSkillEntry(oldSkills.purchasing, defaults.skills.purchasing),
     }
 
+    -- `staff` is deliberately not populated here — it arrives in MIGRATIONS[3] (v3 -> v4), same
+    -- "later step fills in a later addition" shape as `storage` arriving via MIGRATIONS[2].
     local oldRestaurant = if type(old.restaurant) == "table" then old.restaurant else {}
-    local restaurant: Restaurant = {
+    local restaurant = {
         tier = if type(oldRestaurant.tier) == "number" then oldRestaurant.tier else defaults.restaurant.tier,
-        staffHeadcount = if type(oldRestaurant.staffHeadcount) == "number"
-            then oldRestaurant.staffHeadcount
-            else defaults.restaurant.staffHeadcount,
         prestigePoints = if type(oldRestaurant.prestigePoints) == "number"
             then oldRestaurant.prestigePoints
             else defaults.restaurant.prestigePoints,
@@ -199,6 +205,18 @@ MIGRATIONS[2] = function(old: any): PlayerData
         tier = if type(oldStorage.tier) == "number" then oldStorage.tier else 0,
     }
     old.meta.schemaVersion = 3
+    return old
+end
+
+-- v3 -> v4 (M11): replaces `restaurant.staffHeadcount` with `restaurant.staff` (see StaffMember
+-- type comment above) — a real roster instead of a bare count, since deterministic per-staff
+-- performance needs each member's own `rarity`/`hiredAt`. Any pre-existing `staffHeadcount` value
+-- is dropped, not converted to synthetic staff entries — a v3 save is always 0 headcount today
+-- (M11 didn't exist yet to hire anyone), so there is nothing real to preserve.
+MIGRATIONS[3] = function(old: any): PlayerData
+    old.restaurant.staffHeadcount = nil
+    old.restaurant.staff = if type(old.restaurant.staff) == "table" then old.restaurant.staff else {}
+    old.meta.schemaVersion = 4
     return old
 end
 

@@ -131,8 +131,10 @@ do
     print("PlayerDataSchema.spec: v1 -> current migration (cookedPortions addition + later steps) OK")
 end
 
--- v2 -> v3 (M8): a real schema-v2 save (no storage field at all, predating its addition) must
--- gain a default storage.tier of 0 and land on v3, without disturbing any v2 field.
+-- v2 -> current (M8's step, then whatever runs after it): a real schema-v2 save (no storage field
+-- at all, predating its addition) must gain a default storage.tier of 0 and walk the rest of the
+-- chain, without disturbing any v2 field. Asserts against the dynamic current version for the same
+-- reason the v1 test above does.
 do
     local v2Save = {
         skills = {
@@ -152,17 +154,60 @@ do
 
     local migrated = PlayerDataSchema.migrate(v2Save)
 
-    assert(migrated.meta.schemaVersion == 3, "a v2 save must migrate forward to schemaVersion 3")
+    assert(
+        migrated.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
+        "a v2 save must migrate all the way forward to the current schemaVersion"
+    )
     assert(
         type(migrated.storage) == "table" and migrated.storage.tier == 0,
         "a v2 save must gain a default storage.tier of 0"
     )
-    assert(migrated.economy.gold == 750, "v2 -> v3 migration must not disturb existing economy data")
+    assert(
+        type(migrated.restaurant.staff) == "table" and #migrated.restaurant.staff == 0,
+        "a v2 save must also pick up restaurant.staff defaulted by the later v3 -> v4 step"
+    )
+    assert(migrated.restaurant.staffHeadcount == nil, "the legacy staffHeadcount field must be dropped")
+    assert(migrated.economy.gold == 750, "v2 -> current migration must not disturb existing economy data")
     assert(
         #migrated.cookedPortions == 1 and migrated.cookedPortions[1].id == "uuid-3",
-        "v2 -> v3 migration must not disturb existing cookedPortions"
+        "v2 -> current migration must not disturb existing cookedPortions"
     )
-    print("PlayerDataSchema.spec: v2 -> v3 migration (storage addition) OK")
+    print("PlayerDataSchema.spec: v2 -> current migration (storage addition + later steps) OK")
+end
+
+-- v3 -> v4 (M11): a real schema-v3 save (staffHeadcount still present, no staff roster) must drop
+-- staffHeadcount and gain an empty staff array, without disturbing any v3 field.
+do
+    local v3Save = {
+        skills = {
+            fishing = { level = 6, xp = 200 },
+            cooking = { level = 5, xp = 90 },
+            sailing = { level = 1, xp = 0 },
+            hospitality = { level = 1, xp = 0 },
+            purchasing = { level = 1, xp = 0 },
+        },
+        inventory = {},
+        cookedPortions = {},
+        agingLocker = {},
+        restaurant = { tier = 1, staffHeadcount = 2, prestigePoints = 5, trophies = {} },
+        storage = { tier = 1 },
+        economy = { gold = 4200, offlineSnapshotAt = 0, offlineStockCount = 0, tutorialLoanOwed = 0 },
+        meta = { schemaVersion = 3, firstJoinAt = 1717999000, lastJoinAt = 1718000000 },
+    }
+
+    local migrated = PlayerDataSchema.migrate(v3Save)
+
+    assert(migrated.meta.schemaVersion == 4, "a v3 save must migrate forward to schemaVersion 4")
+    assert(migrated.restaurant.staffHeadcount == nil, "a v3 save's staffHeadcount must be dropped, not converted")
+    assert(
+        type(migrated.restaurant.staff) == "table" and #migrated.restaurant.staff == 0,
+        "a v3 save must gain an empty staff roster, not synthetic entries for its old headcount"
+    )
+    assert(migrated.restaurant.tier == 1, "v3 -> v4 migration must not disturb existing restaurant.tier")
+    assert(migrated.restaurant.prestigePoints == 5, "v3 -> v4 migration must not disturb existing prestigePoints")
+    assert(migrated.storage.tier == 1, "v3 -> v4 migration must not disturb existing storage.tier")
+    assert(migrated.economy.gold == 4200, "v3 -> v4 migration must not disturb existing economy data")
+    print("PlayerDataSchema.spec: v3 -> v4 migration (staff roster replaces staffHeadcount) OK")
 end
 
 -- Already-current data must pass through the chain without being altered or re-defaulted.

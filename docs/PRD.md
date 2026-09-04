@@ -580,7 +580,7 @@ Stance resolved (freshness-governed; storage raises capacity and slows spoilage)
 
 1. ~~**Repo layout (§10)**~~ — answered 2026-07-05: (B) dedicated repo `shortgiahy/sushi-sea`.
 2. **Cook verb (#1):** ready to run grill-me on it, or seed a direction first?
-3. **Art timing:** confirm gray-box through Phase 4, Blender at Phase 5 — or an artist earlier?
+3. ~~**Art timing:**~~ answered 2026-09-04: gray-box through Phase 4 (M10-M12), Blender/artist modeling starts at Phase 5 (M13-M18) as originally planned — no early artist track.
 4. **Publishing:** confirm Giahy handles the Creator Hub publish step and receives a buildable project + runbook.
 
 ---
