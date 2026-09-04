@@ -7,9 +7,11 @@ local ServerStorage = game:GetService("ServerStorage")
 local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local OfflineBankCalculator = require(ServerStorage.Modules.OfflineBankCalculator)
+local PassManager = require(ServerStorage.Modules.PassManager)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
 local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
+local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
 
 -- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
 -- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
@@ -32,6 +34,28 @@ local agingLockerUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEven
 -- M16 addition: same reasoning — a freshly loaded player's mounted trophies are only known here,
 -- right after load.
 local trophyUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TrophyUpdate
+
+-- M19 addition: GamePass ownership + purchase prompt. Lives here (not a new service file) because
+-- PRD §7.1 names only the PassManager.lua module, not a dedicated service, and this is already
+-- where every other per-player join/leave push is wired.
+local ownershipUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Monetization_OwnershipUpdate
+local promptPassPurchaseRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Player_PromptPassPurchase
+
+local function _onPromptPassPurchase(player: Player, payload: any): ()
+    local passKey = if typeof(payload) == "table" then payload.passKey else nil
+    if type(passKey) ~= "string" then
+        return
+    end
+
+    local passEntry = MonetizationConfig.GAME_PASSES[passKey]
+    if not passEntry then
+        return -- unrecognized pass key — expected-failure path, not an error
+    end
+
+    PassManager.promptPurchase(player, passEntry.gamePassId)
+end
+
+promptPassPurchaseRemote.OnServerEvent:Connect(_onPromptPassPurchase)
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -138,11 +162,24 @@ Players.PlayerAdded:Connect(function(player: Player)
     })
 
     trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
+
+    local gamePassIds = {}
+    for _, passEntry in MonetizationConfig.GAME_PASSES do
+        table.insert(gamePassIds, passEntry.gamePassId)
+    end
+    PassManager.refreshForPlayer(player.UserId, gamePassIds)
+
+    local ownership = {}
+    for passKey, passEntry in MonetizationConfig.GAME_PASSES do
+        ownership[passKey] = PassManager.playerOwns(player.UserId, passEntry.gamePassId)
+    end
+    ownershipUpdateRemote:FireClient(player, { ownership = ownership })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)
     service:save(player.UserId, player.Name)
     service:release(player.UserId)
+    PassManager.releasePlayer(player.UserId)
 end)
 
 -- PlayerRemoving alone misses server shutdown — BindToClose is the only hook that fires then.

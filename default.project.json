@@ -94,6 +94,12 @@
           },
           "Restaurant_TrophyUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Player_PromptPassPurchase": {
+            "$className": "RemoteEvent"
+          },
+          "Monetization_OwnershipUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {
