@@ -18,6 +18,13 @@
 -- M5 addition: this file also validates the boat serve verb's Player_ServePlate and resolves
 -- served_plate_value via PlateValueResolver.lua (PRD §5's one faucet) — same "lives alongside the
 -- existing verb-input validation rather than a new service file" reasoning as M4's cook verb.
+--
+-- M14 addition: a cast's bite can resolve into a legendary encounter instead of a normal fight —
+-- WeatherAccess (read-only, mirrors PlayerDataAccess) tells this file whether the cast's zone is
+-- the active storm's zone; WeatherRoll resolves the odds roll; LegendaryFight computes each
+-- phase's harder FightConfig. The fight simulation itself is NOT reimplemented — every phase still
+-- runs through the exact same FishingCatch.newFight/applyReelInput/tick a normal catch uses (PRD
+-- §4: "not a bespoke combat system"), just with a per-phase config instead of the shared FIGHT_CONFIG.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -28,9 +35,13 @@ local ConversionModule = require(ServerStorage.Modules.ConversionModule)
 local PlateValueResolver = require(ServerStorage.Modules.PlateValueResolver)
 local FishTable = require(ServerStorage.Modules.FishTable)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
+local WeatherAccess = require(ServerStorage.Modules.WeatherAccess)
+local WeatherRoll = require(ServerStorage.Modules.WeatherRoll)
+local LegendaryFight = require(ServerStorage.Modules.LegendaryFight)
 local FishingConfig = require(ReplicatedStorage.Config.FishingConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
+local WeatherConfig = require(ReplicatedStorage.Config.WeatherConfig)
 local FishSpecies = require(ReplicatedStorage.Modules.FishSpecies)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
@@ -38,6 +49,7 @@ local castLineRemote: RemoteEvent = RemoteEvents.Player_CastLine
 local reelInputRemote: RemoteEvent = RemoteEvents.Player_ReelInput
 local biteWindowRemote: RemoteEvent = RemoteEvents.Fishing_BiteWindow
 local fightResultRemote: RemoteEvent = RemoteEvents.Fishing_FightResult
+local legendaryPhaseAdvancedRemote: RemoteEvent = RemoteEvents.Fishing_LegendaryPhaseAdvanced
 local cookTraceRemote: RemoteEvent = RemoteEvents.Player_CookTrace
 local cookStrokeRemote: RemoteEvent = RemoteEvents.Player_CookStroke
 local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolved
@@ -46,6 +58,15 @@ local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
 local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
 local purchaseStorageTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseStorageTier
 local storageTierUpdateRemote: RemoteEvent = RemoteEvents.Storage_TierUpdate
+
+local LEGENDARY_TUNING: LegendaryFight.LegendaryTuning = {
+    PHASE_COUNT = WeatherConfig.LEGENDARY_PHASE_COUNT,
+    PHASE_WIDTH_MULTIPLIER = WeatherConfig.LEGENDARY_PHASE_WIDTH_MULTIPLIER,
+    MIN_CATCH_BOX_WIDTH = WeatherConfig.LEGENDARY_MIN_CATCH_BOX_WIDTH,
+    LEVEL_RELIEF_PER_LEVEL = WeatherConfig.LEGENDARY_LEVEL_RELIEF_PER_LEVEL,
+    MAX_LEVEL_RELIEF = WeatherConfig.LEGENDARY_MAX_LEVEL_RELIEF,
+    MAX_FISHING_LEVEL_FOR_RELIEF = WeatherConfig.LEGENDARY_MAX_FISHING_LEVEL_FOR_RELIEF,
+}
 
 -- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
 -- (see EconomyConfig.lua's header for why this isn't duplicated there) rather than defining a
@@ -80,6 +101,15 @@ type PlayerFishingState = {
     pendingCast: boolean,
     lastReelInputAt: number?,
     fight: FishingCatch.FightState?,
+    -- M14 additions: pendingCastZone is stashed at cast time (WeatherRoll.zoneFor) so the bite
+    -- timer, which fires later, can check it against the then-current storm. activeFightConfig is
+    -- the FightConfig actually driving `fight` right now — FIGHT_CONFIG for a normal fight, or a
+    -- phase-specific override for a legendary one. legendaryPhaseIndex/legendaryType are set only
+    -- while a legendary encounter is in progress.
+    pendingCastZone: string?,
+    activeFightConfig: FishingCatch.FightConfig?,
+    legendaryPhaseIndex: number?,
+    legendaryType: string?,
 }
 
 local playerStates: { [number]: PlayerFishingState } = {}
@@ -87,10 +117,30 @@ local playerStates: { [number]: PlayerFishingState } = {}
 local function _stateFor(userId: number): PlayerFishingState
     local state = playerStates[userId]
     if not state then
-        state = { lastCastAt = nil, pendingCast = false, lastReelInputAt = nil, fight = nil }
+        state = {
+            lastCastAt = nil,
+            pendingCast = false,
+            lastReelInputAt = nil,
+            fight = nil,
+            pendingCastZone = nil,
+            activeFightConfig = nil,
+            legendaryPhaseIndex = nil,
+            legendaryType = nil,
+        }
         playerStates[userId] = state
     end
     return state
+end
+
+-- Phase 1 = the base FIGHT_CONFIG's own width/duration; later phases narrow the catch box
+-- (LegendaryFight.catchBoxWidthFor) and stretch the duration to WeatherConfig's legendary phase
+-- length. table.clone so mutating the copy never touches the shared FIGHT_CONFIG.
+local function _legendaryFightConfigFor(phaseIndex: number, fishingLevel: number): FishingCatch.FightConfig
+    local config = table.clone(FIGHT_CONFIG)
+    config.CATCH_BOX_WIDTH =
+        LegendaryFight.catchBoxWidthFor(phaseIndex, fishingLevel, FishingConfig.CATCH_BOX_WIDTH, LEGENDARY_TUNING)
+    config.FIGHT_DURATION_SECONDS = WeatherConfig.LEGENDARY_PHASE_DURATION_SECONDS
+    return config
 end
 
 -- Cook-verb pending state (M4). Separate table from playerStates/PlayerFishingState — cooking and
@@ -124,6 +174,10 @@ local function _getCharacterRoot(player: Player): BasePart?
     return character and (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
 end
 
+-- Forward-declared: _endFight (M14's phase-advance branch) and _scheduleTimeout call each other —
+-- same mutual-recursion shape BoatCookController.lua's trace/stroke chain already documents.
+local _scheduleTimeout: (player: Player, state: PlayerFishingState, fightId: string, fightDurationSeconds: number) -> ()
+
 -- Deferred from M3 (BUILD_LOG.md M3 entry): writes the caught fish into PlayerDataService's
 -- inventory via PlayerDataAccess, the cross-service access pattern M4 introduces (see that
 -- module's header). Returns the generated fishId, or nil if PlayerData isn't loaded yet (e.g. a
@@ -155,6 +209,47 @@ local function _endFight(player: Player, state: PlayerFishingState, outcome: Fis
         return
     end
 
+    -- M14: a legendary encounter in progress. Succeeding a non-final phase advances instead of
+    -- ending; anything else (a final-phase catch, or a failure at any phase) terminates the whole
+    -- encounter here — no partial credit for a partly-fought legendary (PRD §4: "no buy-in, no
+    -- loss penalty. Losing costs nothing but the moment").
+    if state.legendaryPhaseIndex then
+        if outcome == "caught" and not LegendaryFight.isFinalPhase(state.legendaryPhaseIndex, LEGENDARY_TUNING) then
+            local nextPhase = state.legendaryPhaseIndex + 1
+            local dataService = PlayerDataAccess.getInstance()
+            local data = dataService and dataService:get(player.UserId)
+            local fishingLevel = if data then data.skills.fishing.level else 1
+            local nextConfig = _legendaryFightConfigFor(nextPhase, fishingLevel)
+
+            state.legendaryPhaseIndex = nextPhase
+            state.activeFightConfig = nextConfig
+            state.fight = FishingCatch.newFight(os.clock(), fight.fightId)
+
+            legendaryPhaseAdvancedRemote:FireClient(
+                player,
+                fight.fightId,
+                nextPhase,
+                nextConfig.CATCH_BOX_WIDTH,
+                nextConfig.FIGHT_DURATION_SECONDS
+            )
+            _scheduleTimeout(player, state, fight.fightId, nextConfig.FIGHT_DURATION_SECONDS)
+            return
+        end
+
+        local legendaryType = state.legendaryType
+        state.legendaryPhaseIndex = nil
+        state.legendaryType = nil
+        state.activeFightConfig = nil
+
+        if outcome == "caught" then
+            local fishId = legendaryType and _writeCaughtFishToInventory(player, legendaryType)
+            fightResultRemote:FireClient(player, fight.fightId, "caught", legendaryType, "legendary", fishId)
+        else
+            fightResultRemote:FireClient(player, fight.fightId, outcome, nil, nil, nil)
+        end
+        return
+    end
+
     if outcome == "caught" then
         local qualityScore = FishingCatch.qualityScoreFor(fight)
         local catch = FishingCatch.rollCatch(FishSpecies.SPECIES, qualityScore)
@@ -175,15 +270,22 @@ end
 
 -- Schedules the fight's own timeout resolution independent of further client input — if the
 -- client stops sending Player_ReelInput entirely (dropped connection, exploiter silence), the
--- fight still resolves instead of leaving state.fight dangling forever.
-local function _scheduleTimeout(player: Player, state: PlayerFishingState, fightId: string): ()
-    local budgetSeconds = FishingConfig.HOOK_REACTION_WINDOW_SECONDS + FishingConfig.FIGHT_DURATION_SECONDS
+-- fight still resolves instead of leaving state.fight dangling forever. `fightDurationSeconds` is
+-- the currently-active phase's duration (M14: legendary phases run longer than a normal fight),
+-- not always FishingConfig.FIGHT_DURATION_SECONDS.
+_scheduleTimeout = function(
+    player: Player,
+    state: PlayerFishingState,
+    fightId: string,
+    fightDurationSeconds: number
+): ()
+    local budgetSeconds = FishingConfig.HOOK_REACTION_WINDOW_SECONDS + fightDurationSeconds
     task.delay(budgetSeconds + 0.5, function()
         local fight = state.fight
         if not fight or fight.fightId ~= fightId then
             return
         end
-        local _, outcome = FishingCatch.tick(fight, os.clock(), FIGHT_CONFIG)
+        local _, outcome = FishingCatch.tick(fight, os.clock(), state.activeFightConfig or FIGHT_CONFIG)
         if outcome ~= "ongoing" then
             _endFight(player, state, outcome)
         end
@@ -210,16 +312,47 @@ local function _startBiteTimer(player: Player, state: PlayerFishingState): ()
             return -- a stray timer from an already-superseded cast cycle; should not happen, but cheap to guard
         end
 
+        -- M14: weather-triggered legendary roll. "Weather-triggered, not summonable" (PRD §4) is
+        -- read literally — this can only succeed while a storm is active AND the cast landed in
+        -- that storm's zone; there is no separate ambient/baseline chance outside that condition.
+        local storm = WeatherAccess.getCurrentStorm()
+        local inActiveZone = storm ~= nil and state.pendingCastZone ~= nil and state.pendingCastZone == storm.zone
+        local legendaryOdds = if inActiveZone
+            then WeatherConfig.BASELINE_LEGENDARY_ODDS_PER_CAST * WeatherConfig.IN_ZONE_LEGENDARY_ODDS_MULTIPLIER
+            else 0
+        local isLegendary = inActiveZone and WeatherRoll.shouldTriggerLegendary(legendaryOdds)
+
+        local fightConfig = FIGHT_CONFIG
+        if isLegendary then
+            local dataService = PlayerDataAccess.getInstance()
+            local data = dataService and dataService:get(player.UserId)
+            local fishingLevel = if data then data.skills.fishing.level else 1
+            fightConfig = _legendaryFightConfigFor(1, fishingLevel)
+            state.legendaryPhaseIndex = 1
+            state.legendaryType = (storm :: WeatherAccess.Storm).legendaryType
+        else
+            state.legendaryPhaseIndex = nil
+            state.legendaryType = nil
+        end
+        state.activeFightConfig = fightConfig
+
         local fightId = HttpService:GenerateGUID(false)
         state.fight = FishingCatch.newFight(os.clock(), fightId)
         warn(
-            ("[EconomyService][debug] %s: bite timer fired after %.1fs, firing Fishing_BiteWindow"):format(
+            ("[EconomyService][debug] %s: bite timer fired after %.1fs, firing Fishing_BiteWindow%s"):format(
                 player.Name,
-                waitSeconds
+                waitSeconds,
+                if isLegendary then " (LEGENDARY)" else ""
             )
         )
-        biteWindowRemote:FireClient(player, fightId)
-        _scheduleTimeout(player, state, fightId)
+        biteWindowRemote:FireClient(
+            player,
+            fightId,
+            fightConfig.CATCH_BOX_WIDTH,
+            fightConfig.FIGHT_DURATION_SECONDS,
+            isLegendary
+        )
+        _scheduleTimeout(player, state, fightId, fightConfig.FIGHT_DURATION_SECONDS)
     end)
 end
 
@@ -277,6 +410,7 @@ local function _onCastLine(player: Player, payload: any): ()
 
     state.lastCastAt = now
     state.pendingCast = true
+    state.pendingCastZone = WeatherRoll.zoneFor(location, WeatherConfig.ZONE_SIZE_STUDS)
     warn(("[EconomyService][debug] %s: cast ACCEPTED, waiting on bite timer"):format(player.Name))
     _startBiteTimer(player, state)
 end
@@ -301,7 +435,8 @@ local function _onReelInput(player: Player, payload: any): ()
     end
     state.lastReelInputAt = now
 
-    local updatedFight, outcome = FishingCatch.applyReelInput(fight, tension, now, FIGHT_CONFIG)
+    local updatedFight, outcome =
+        FishingCatch.applyReelInput(fight, tension, now, state.activeFightConfig or FIGHT_CONFIG)
     state.fight = updatedFight
 
     if outcome ~= "ongoing" then

@@ -14,7 +14,7 @@
 -- loinCount roughly scaled to real tuna/opah primal-cut anatomy. Not yet validated against play.
 local FishSpecies = {}
 
-export type RarityTier = "common" | "uncommon" | "rare"
+export type RarityTier = "common" | "uncommon" | "rare" | "legendary"
 export type PrepTier = "quick" | "full"
 
 export type SpeciesEntry = {
@@ -72,6 +72,19 @@ FishSpecies.SPECIES = {
         prepTier = "full",
         loinCount = 3,
         maxYield = 6,
+    },
+    -- M14 addition: the first legendary (PRD §4 "Legendary creatures"). catchWeight = 0 is
+    -- deliberate — FishingCatch.rollCatch's weighted table must never roll this normally; it's
+    -- only reachable through EconomyService's separate weather-triggered legendary path
+    -- (WeatherRoll.shouldTriggerLegendary), never as a random outcome of an ordinary cast.
+    {
+        id = "kraken",
+        displayName = "Kraken",
+        rarity = "legendary",
+        catchWeight = 0,
+        prepTier = "full",
+        loinCount = 6,
+        maxYield = 12,
     },
 }
 

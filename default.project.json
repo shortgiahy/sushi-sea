@@ -67,6 +67,12 @@
           },
           "Restaurant_CustomerUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Weather_StormBroadcast": {
+            "$className": "RemoteEvent"
+          },
+          "Fishing_LegendaryPhaseAdvanced": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

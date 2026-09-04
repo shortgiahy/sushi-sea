@@ -19,6 +19,9 @@ FishTable.CUT_BASE = {
     yellowtail = { otoro = 42, chutoro = 28, akami = 16 },
     tuna = { otoro = 96, chutoro = 64, akami = 36 },
     opah = { otoro = 120, chutoro = 80, akami = 45 },
+    -- M14: the legendary tier — a Kraken plate is meant to feel like a windfall, priced well above
+    -- anything the ordinary weighted catch table can produce.
+    kraken = { otoro = 400, chutoro = 260, akami = 150 },
 }
 
 function FishTable.cutBaseFor(speciesId: string, grade: Grade): number?
