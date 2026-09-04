@@ -46,6 +46,12 @@
           },
           "Economy_GoldUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Player_PurchaseStorageTier": {
+            "$className": "RemoteEvent"
+          },
+          "Storage_TierUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

@@ -1,7 +1,7 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 2
+local SCHEMA_VERSION = 3
 local TUTORIAL_LOAN_DEFAULT = 500
 
 export type SkillEntry = { level: number, xp: number }
@@ -33,6 +33,14 @@ export type Restaurant = {
     trophies: { Trophy },
 }
 
+-- Storage capacity/spoilage-slowdown upgrade line (M8, PRD §12 Thread #5 partial resolution
+-- 2026-09-04) — its own Purchasing category, kept separate from `restaurant.tier` (the
+-- brick-and-mortar upgrade line) exactly as PRD §5's sink stack lists "storage capacity" and
+-- "restaurant tiers" as distinct categories. `tier` indexes EconomyConfig.STORAGE_TIERS.
+export type Storage = {
+    tier: number,
+}
+
 export type Economy = {
     gold: number,
     offlineSnapshotAt: number,
@@ -52,6 +60,7 @@ export type PlayerData = {
     cookedPortions: { CookedPortion },
     agingLocker: { AgingFish },
     restaurant: Restaurant,
+    storage: Storage,
     economy: Economy,
     meta: Meta,
 }
@@ -79,6 +88,9 @@ function PlayerDataSchema.newDefault(): PlayerData
             staffHeadcount = 0,
             prestigePoints = 0,
             trophies = {},
+        },
+        storage = {
+            tier = 0,
         },
         economy = {
             gold = 0,
@@ -176,6 +188,17 @@ end
 MIGRATIONS[1] = function(old: any): PlayerData
     old.cookedPortions = if type(old.cookedPortions) == "table" then old.cookedPortions else {}
     old.meta.schemaVersion = 2
+    return old
+end
+
+-- v2 -> v3 (M8): adds the `storage` section (see the Storage type comment above) — another pure
+-- addition, same shape as v1 -> v2's cookedPortions arrival.
+MIGRATIONS[2] = function(old: any): PlayerData
+    local oldStorage = if type(old.storage) == "table" then old.storage else {}
+    old.storage = {
+        tier = if type(oldStorage.tier) == "number" then oldStorage.tier else 0,
+    }
+    old.meta.schemaVersion = 3
     return old
 end
 

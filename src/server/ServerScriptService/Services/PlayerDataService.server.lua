@@ -6,11 +6,17 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
+local OfflineBankCalculator = require(ServerStorage.Modules.OfflineBankCalculator)
+local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 
 -- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
 -- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
 -- loaded player's starting gold is known.
 local goldUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Economy_GoldUpdate
+
+-- M8 addition: same reasoning as goldUpdateRemote — a freshly loaded player's storage tier/
+-- capacity is only known here, right after load.
+local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Storage_TierUpdate
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -49,9 +55,43 @@ end
 local service = PlayerDataService.new(dataStore)
 PlayerDataAccess.setInstance(service)
 
+-- M9 addition: PRD §7.4's closed-form offline bank, run once right after load. Only fires when a
+-- prior save actually stamped a snapshot (offlineSnapshotAt > 0) — a brand-new player has nothing
+-- to reconcile. staffHeadcount is always 0 today (M11 doesn't exist yet), so
+-- OfflineBankCalculator.compute always resolves to 0 here — the throughput/plate-value/wage inputs
+-- below are inert placeholders until M11 gives them real values, not this session's numbers.
+local function _creditOfflineBank(data: any): ()
+    if data.economy.offlineSnapshotAt <= 0 then
+        return
+    end
+
+    local elapsedSeconds = math.max(os.time() - data.economy.offlineSnapshotAt, 0)
+    local netBank = OfflineBankCalculator.compute({
+        elapsedSeconds = elapsedSeconds,
+        staffHeadcount = data.restaurant.staffHeadcount,
+        throughputPerHourWhenStaffed = 0,
+        avgPlateValueAtLogout = 0,
+        remainingStockAfterSpoilage = 0,
+        wageRatePerHourPerStaff = 0,
+    })
+
+    data.economy.gold += netBank
+    data.economy.offlineSnapshotAt = os.time() -- PRD §7.4 step 7: clear the snapshot after crediting
+end
+
 Players.PlayerAdded:Connect(function(player: Player)
     local data = service:load(player.UserId, player.Name)
+    _creditOfflineBank(data)
     goldUpdateRemote:FireClient(player, data.economy.gold)
+
+    local tierData = EconomyConfig.STORAGE_TIERS[data.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    local nextTierData = EconomyConfig.STORAGE_TIERS[data.storage.tier + 1]
+    storageTierUpdateRemote:FireClient(player, {
+        tier = data.storage.tier,
+        name = tierData.name,
+        capacity = tierData.capacity,
+        nextTierCost = if nextTierData then nextTierData.upgradeCost else nil,
+    })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)

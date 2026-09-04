@@ -44,6 +44,8 @@ local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolve
 local servePlateRemote: RemoteEvent = RemoteEvents.Player_ServePlate
 local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
 local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
+local purchaseStorageTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseStorageTier
+local storageTierUpdateRemote: RemoteEvent = RemoteEvents.Storage_TierUpdate
 
 -- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
 -- (see EconomyConfig.lua's header for why this isn't duplicated there) rather than defining a
@@ -125,12 +127,19 @@ end
 -- Deferred from M3 (BUILD_LOG.md M3 entry): writes the caught fish into PlayerDataService's
 -- inventory via PlayerDataAccess, the cross-service access pattern M4 introduces (see that
 -- module's header). Returns the generated fishId, or nil if PlayerData isn't loaded yet (e.g. a
--- race right at join) — the catch still displays client-side in that case, it just can't be
--- cooked, matching this fight-sim's existing best-effort stance on transient player state.
+-- race right at join) or the player's storage is already at capacity (M8, PRD §4's "forces
+-- restocking" leash extends to a hard cap, not just a timer) — the catch still displays
+-- client-side in either case, it just can't be cooked, matching this fight-sim's existing
+-- best-effort stance on transient/edge-case player state.
 local function _writeCaughtFishToInventory(player: Player, speciesId: string): string?
     local dataService = PlayerDataAccess.getInstance()
     local data = dataService and dataService:get(player.UserId)
     if not data then
+        return nil
+    end
+
+    local tierData = EconomyConfig.STORAGE_TIERS[data.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    if #data.inventory >= tierData.capacity then
         return nil
     end
 
@@ -519,10 +528,44 @@ local function _onServePlate(player: Player, payload: any): ()
     goldUpdateRemote:FireClient(player, data.economy.gold)
 end
 
+-- Storage tier purchase (M8, PRD §12 Thread #5 partial resolution). No dedicated PurchasingService
+-- exists in PRD §7.1's file tree — same "lives alongside the existing verb-input validation
+-- rather than inventing an unlisted service file" reasoning M4/M5's headers already documented for
+-- their own Player_* handlers. One tier per press, no batching, matching every other verb here.
+local function _onPurchaseStorageTier(player: Player): ()
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local nextTier = data.storage.tier + 1
+    local tierData = EconomyConfig.STORAGE_TIERS[nextTier]
+    if not tierData then
+        return -- already at EconomyConfig.MAX_STORAGE_TIER — expected-failure path, not an error
+    end
+    if data.economy.gold < tierData.upgradeCost then
+        return -- can't afford it — expected-failure path (PRD §8), not an error
+    end
+
+    data.economy.gold -= tierData.upgradeCost
+    data.storage.tier = nextTier
+
+    goldUpdateRemote:FireClient(player, data.economy.gold)
+    local afterNextTierData = EconomyConfig.STORAGE_TIERS[nextTier + 1]
+    storageTierUpdateRemote:FireClient(player, {
+        tier = data.storage.tier,
+        name = tierData.name,
+        capacity = tierData.capacity,
+        nextTierCost = if afterNextTierData then afterNextTierData.upgradeCost else nil,
+    })
+end
+
 castLineRemote.OnServerEvent:Connect(_onCastLine)
 reelInputRemote.OnServerEvent:Connect(_onReelInput)
 cookTraceRemote.OnServerEvent:Connect(_onCookTrace)
 cookStrokeRemote.OnServerEvent:Connect(_onCookStroke)
+purchaseStorageTierRemote.OnServerEvent:Connect(_onPurchaseStorageTier)
 servePlateRemote.OnServerEvent:Connect(_onServePlate)
 
 Players.PlayerRemoving:Connect(function(player: Player)

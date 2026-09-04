@@ -6,6 +6,11 @@
 -- already established; positioned top-left so it never overlaps that HUD (top-center). A spoiled
 -- entry is never rendered here — SpoilageService.server.lua tosses it before snapshotting, so
 -- "spoiled" never appears in an update payload; only "fresh"/"stale" need a color.
+--
+-- M8 addition: a storage-tier line + upgrade button (Storage_TierUpdate, Player_PurchaseStorageTier)
+-- — this panel is already the inventory-side HUD, so the capacity/tier readout belongs here rather
+-- than a separate storefront; ShopUI.lua's fuller "Purchasing skill storefront" is a bigger, later
+-- system covering rods/boats/equipment, not just this one number.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -21,6 +26,12 @@ local STATE_COLOR: { [string]: Color3 } = {
 local goldLabel: TextLabel? = nil
 local inventoryContainer: Frame? = nil
 local portionsContainer: Frame? = nil
+local storageLabel: TextLabel? = nil
+local upgradeButton: TextButton? = nil
+local purchaseStorageTierRemote: RemoteEvent? = nil
+
+local storageTierState = { tier = 0, name = "Boat cooler", capacity = 10, nextTierCost = 500 :: number? }
+local lastInventoryCount = 0
 
 local function _clearContainer(container: Frame): ()
     for _, child in container:GetChildren() do
@@ -55,7 +66,7 @@ local function _buildGui(): ()
     local root = Instance.new("Frame")
     root.Name = "Root"
     root.Position = UDim2.fromOffset(16, 16)
-    root.Size = UDim2.fromOffset(220, 260)
+    root.Size = UDim2.fromOffset(220, 330)
     root.BackgroundTransparency = 1
     root.Parent = screenGui
 
@@ -116,11 +127,36 @@ local function _buildGui(): ()
     portLayout.SortOrder = Enum.SortOrder.LayoutOrder
     portLayout.Parent = portContainer
 
+    local storage = Instance.new("TextLabel")
+    storage.Name = "Storage"
+    storage.Position = UDim2.fromOffset(0, 262)
+    storage.Size = UDim2.new(1, 0, 0, 18)
+    storage.BackgroundTransparency = 1
+    storage.TextColor3 = Color3.new(1, 1, 1)
+    storage.TextXAlignment = Enum.TextXAlignment.Left
+    storage.Font = Enum.Font.SourceSans
+    storage.TextSize = 15
+    storage.Text = ""
+    storage.Parent = root
+
+    local upgrade = Instance.new("TextButton")
+    upgrade.Name = "UpgradeStorageButton"
+    upgrade.Position = UDim2.fromOffset(0, 284)
+    upgrade.Size = UDim2.fromOffset(180, 30)
+    upgrade.BackgroundColor3 = Color3.fromRGB(60, 80, 100)
+    upgrade.TextColor3 = Color3.new(1, 1, 1)
+    upgrade.Font = Enum.Font.SourceSansBold
+    upgrade.TextSize = 16
+    upgrade.Text = ""
+    upgrade.Parent = root
+
     screenGui.Parent = playerGui
 
     goldLabel = gold
     inventoryContainer = invContainer
     portionsContainer = portContainer
+    storageLabel = storage
+    upgradeButton = upgrade
 end
 
 type InventorySnapshotEntry = { id: string, species: string, freshnessState: string, freshnessFraction: number }
@@ -131,6 +167,28 @@ type PortionSnapshotEntry = {
     freshnessState: string,
     freshnessFraction: number,
 }
+
+type StorageTierUpdate = { tier: number, name: string, capacity: number, nextTierCost: number? }
+
+-- Mirrors server state only — capacity/count/cost all arrive via remotes, nothing here is computed
+-- from local guesses (same "never compute locally" contract as freshness state).
+local function _refreshStorageDisplay(): ()
+    if storageLabel then
+        storageLabel.Text = ("Storage: %s (%d/%d)"):format(
+            storageTierState.name,
+            lastInventoryCount,
+            storageTierState.capacity
+        )
+    end
+    if upgradeButton then
+        if storageTierState.nextTierCost then
+            upgradeButton.Text = ("Upgrade Storage (%dg)"):format(storageTierState.nextTierCost)
+            upgradeButton.Visible = true
+        else
+            upgradeButton.Visible = false -- already at EconomyConfig.MAX_STORAGE_TIER
+        end
+    end
+end
 
 local function _onInventoryUpdate(
     payload: { inventory: { InventorySnapshotEntry }, cookedPortions: { PortionSnapshotEntry } }
@@ -155,6 +213,9 @@ local function _onInventoryUpdate(
             color
         )
     end
+
+    lastInventoryCount = #payload.inventory
+    _refreshStorageDisplay()
 end
 
 local function _onGoldUpdate(gold: number): ()
@@ -163,15 +224,34 @@ local function _onGoldUpdate(gold: number): ()
     end
 end
 
+local function _onStorageTierUpdate(payload: StorageTierUpdate): ()
+    storageTierState = payload
+    _refreshStorageDisplay()
+end
+
+local function _onUpgradeButtonPressed(): ()
+    if purchaseStorageTierRemote then
+        purchaseStorageTierRemote:FireServer()
+    end
+end
+
 function FreshnessUI.init(): ()
     local remoteEvents = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RemoteEvents")
     local inventoryUpdateRemote = remoteEvents:WaitForChild("Spoilage_InventoryUpdate") :: RemoteEvent
     local goldUpdateRemote = remoteEvents:WaitForChild("Economy_GoldUpdate") :: RemoteEvent
+    local storageTierUpdateRemote = remoteEvents:WaitForChild("Storage_TierUpdate") :: RemoteEvent
+    purchaseStorageTierRemote = remoteEvents:WaitForChild("Player_PurchaseStorageTier") :: RemoteEvent
 
     _buildGui()
+    _refreshStorageDisplay()
 
     inventoryUpdateRemote.OnClientEvent:Connect(_onInventoryUpdate)
     goldUpdateRemote.OnClientEvent:Connect(_onGoldUpdate)
+    storageTierUpdateRemote.OnClientEvent:Connect(_onStorageTierUpdate)
+
+    if upgradeButton then
+        upgradeButton.Activated:Connect(_onUpgradeButtonPressed)
+    end
 end
 
 return FreshnessUI

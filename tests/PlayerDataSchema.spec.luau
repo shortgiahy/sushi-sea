@@ -86,8 +86,12 @@ do
     print("PlayerDataSchema.spec: nil input -> fresh default OK")
 end
 
--- v1 -> v2 (M4): a real schema-v1 save (no cookedPortions field at all, predating its addition)
--- must gain an empty cookedPortions array and land on v2, without disturbing any v1 field.
+-- v1 -> current (M4's step, then whatever runs after it): a real schema-v1 save (no
+-- cookedPortions field at all, predating its addition) must gain an empty cookedPortions array
+-- and walk the rest of the chain to the current schema version, without disturbing any v1 field.
+-- migrate() always walks all the way to SCHEMA_VERSION, not just one step, so this asserts against
+-- the dynamic current version rather than a hardcoded "2" that later steps (e.g. M8's v2 -> v3)
+-- would otherwise make stale.
 do
     local v1Save = {
         skills = {
@@ -106,18 +110,59 @@ do
 
     local migrated = PlayerDataSchema.migrate(v1Save)
 
-    assert(migrated.meta.schemaVersion == 2, "a v1 save must migrate forward to schemaVersion 2")
+    assert(
+        migrated.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
+        "a v1 save must migrate all the way forward to the current schemaVersion"
+    )
     assert(
         type(migrated.cookedPortions) == "table" and #migrated.cookedPortions == 0,
         "a v1 save must gain an empty cookedPortions array"
     )
-    assert(migrated.skills.cooking.level == 2, "v1 -> v2 migration must not disturb existing skill data")
-    assert(migrated.economy.gold == 300, "v1 -> v2 migration must not disturb existing economy data")
+    assert(
+        type(migrated.storage) == "table" and migrated.storage.tier == 0,
+        "a v1 save must also pick up storage.tier defaulted by the later v2 -> v3 step"
+    )
+    assert(migrated.skills.cooking.level == 2, "v1 -> current migration must not disturb existing skill data")
+    assert(migrated.economy.gold == 300, "v1 -> current migration must not disturb existing economy data")
     assert(
         #migrated.inventory == 1 and migrated.inventory[1].id == "uuid-2",
-        "v1 -> v2 migration must not disturb existing inventory"
+        "v1 -> current migration must not disturb existing inventory"
     )
-    print("PlayerDataSchema.spec: v1 -> v2 migration (cookedPortions addition) OK")
+    print("PlayerDataSchema.spec: v1 -> current migration (cookedPortions addition + later steps) OK")
+end
+
+-- v2 -> v3 (M8): a real schema-v2 save (no storage field at all, predating its addition) must
+-- gain a default storage.tier of 0 and land on v3, without disturbing any v2 field.
+do
+    local v2Save = {
+        skills = {
+            fishing = { level = 4, xp = 80 },
+            cooking = { level = 3, xp = 25 },
+            sailing = { level = 1, xp = 0 },
+            hospitality = { level = 1, xp = 0 },
+            purchasing = { level = 1, xp = 0 },
+        },
+        inventory = {},
+        cookedPortions = { { id = "uuid-3", species = "tuna", grade = "otoro", cookedAt = 1718002000 } },
+        agingLocker = {},
+        restaurant = { tier = 0, staffHeadcount = 0, prestigePoints = 0, trophies = {} },
+        economy = { gold = 750, offlineSnapshotAt = 0, offlineStockCount = 0, tutorialLoanOwed = 500 },
+        meta = { schemaVersion = 2, firstJoinAt = 1717999000, lastJoinAt = 1718000000 },
+    }
+
+    local migrated = PlayerDataSchema.migrate(v2Save)
+
+    assert(migrated.meta.schemaVersion == 3, "a v2 save must migrate forward to schemaVersion 3")
+    assert(
+        type(migrated.storage) == "table" and migrated.storage.tier == 0,
+        "a v2 save must gain a default storage.tier of 0"
+    )
+    assert(migrated.economy.gold == 750, "v2 -> v3 migration must not disturb existing economy data")
+    assert(
+        #migrated.cookedPortions == 1 and migrated.cookedPortions[1].id == "uuid-3",
+        "v2 -> v3 migration must not disturb existing cookedPortions"
+    )
+    print("PlayerDataSchema.spec: v2 -> v3 migration (storage addition) OK")
 end
 
 -- Already-current data must pass through the chain without being altered or re-defaulted.

@@ -556,11 +556,15 @@ Single-fish nigiri is the only dish; attribute-mixing cut; dry-aging opt-in and 
 ### #3 First-pass economy model
 Build the 5-row faucets-minus-sinks table — rows: tutorial boat, new restaurant, mid, late, whale; columns: avg plate value, plates/hr, headcount, wages/hr, spoilage/hr, net income/hr, time to next tier. **Single output to read:** does net income/hr grow faster than next-tier cost? **Dial to find:** where the throughput cliff lands (healthy ≈ week 6). Tune with spoilage rate + next-tier pricing; wages are weak. Run as a dedicated numbers session.
 
+**Partially resolved 2026-09-04 (quick-pass numbers session, jointly with #5):** the storage-capacity `tierUpgradeCost` ladder is set (`docs/design/economy-model-skeleton.md` Row 4). The full progression-stage validation table (does net income/hr beat next-tier cost, where the throughput cliff lands) is still open — deferred to a follow-up session once M8 has a Studio pass and real plates/hour data exists.
+
 ### #4 Legendary fight phase structure
 Locked as "scaled-up multi-phase reel," unspecified: phase count, per-level-band window sizes, stamina curves, dive-phase mechanics. Needs base reel numbers first (#1 → Phase 2 / M3).
 
 ### #5 Spoilage ↔ offline-coast values
 Stance resolved (freshness-governed; storage raises capacity and slows spoilage). Unset: actual decay rates, storage tier ladder, coast lengths per tier. **Same dial as the 24–48h target — tune jointly with #3.**
+
+**Partially resolved 2026-09-04:** raw-fish/cooked-portion decay thresholds (tier-0 baseline: 45min/90min raw, 20min/40min cooked) and a 4-tier storage ladder (capacity 10→80, spoilage slowdown 1×→8×) are set — tier 3 lands raw-fish spoilage at 12h, the top of this thread's "late game 12h+" target. `docs/design/economy-model-skeleton.md` Rows 3-4 have the full table. Per-species decay-rate variance is still unset (M6/M8 use one flat threshold per tier).
 
 ### #6 Smaller undefineds (close before launch)
 - **Purchasing tiers:** boats, rods, equipment, storage, restaurant tiers — ladder, costs, unlocks

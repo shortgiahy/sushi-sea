@@ -1,9 +1,12 @@
 # Economy Model Skeleton — Faucets vs. Sinks
 
-> **This is a starting structure for the Phase 3 / M7 numbers session, not a locked model.**
-> It exists to give the Giahy numbers session (PRD §12 Open Thread #3, resolved jointly with Thread #5 — see ROADMAP.md Phase 3 / M7) a formula-level scaffold to fill in, so that session starts from named variables instead of a blank page. **No numeric value in this document is decided.** Every rate, threshold, and cost is `TBD (Giahy numbers session)`. Where a clamp is already locked elsewhere in the PRD (§5), this doc cites the source instead of repeating the digits, so nothing here can be mistaken for a new decision.
+> **Rows 3 and 4's core numbers were decided in a quick-pass Giahy numbers session on 2026-09-04**
+> (storage tier ladder, tier-0 spoilage baseline — see below). Rows 1, 2, and 5's variables, and
+> the full Thread #3 progression-stage validation table, remain open — this is still a partial
+> resolution, not the complete numbers session PRD §12 originally scoped. Where a clamp is already
+> locked elsewhere in the PRD (§5), this doc cites the source instead of repeating the digits.
 >
-> Do not treat any formula shape here as locked either, except where explicitly marked "(locked, PRD §X)" — the rest is a first-pass structure for the numbers session to confirm, adjust, or replace.
+> Do not treat any formula shape here as locked either, except where explicitly marked "(locked, PRD §X)" — the rest is a first-pass structure the numbers session confirmed, adjusted, or left open.
 
 ## Scope
 
@@ -78,11 +81,14 @@ value_lost_per_hour ≈ spoiledCount_per_hour × avg(species_base × cooking_ext
 
 Items on the aging track (`agingLocker`, §7.3) are **not** part of this row — PRD §4 is explicit that aging fish "leave the spoilage track and enter the aging track"; spoilage loss only applies to standard inventory.
 
-| Variable | Definition | Value |
+**Decided 2026-09-04 (tier-0 baseline, `EconomyConfig.lua`):**
+
+| | Raw fish | Cooked portion |
 |---|---|---|
-| `decayRate` (per species/tier) | freshness-timer slope | `TBD (Giahy numbers session — PRD §12 Thread #5)` |
-| `staleThreshold`, `spoiledThreshold` | freshness-timer breakpoints feeding `freshness_polish` (Row 1) and the fresh/stale/spoiled state | `TBD (Giahy numbers session)` |
-| storage-tier decay modifier | PRD §4: "storage upgrades raise capacity *and* slow spoilage" | `TBD (Giahy numbers session)` |
+| `staleThreshold` | 45 min | 20 min |
+| `spoiledThreshold` | 90 min | 40 min |
+
+Cooked portions decay faster than raw fish at every tier — already-extracted value is more urgent to sell; raw fish is the hoardable resource whose spoiled-after time is the actual "coast length" this dial targets. `decayRate` per species is still `TBD` — M6/M8 implement a flat threshold, not a per-species slope; species-level variance is a later pass, not blocking M8's exit criteria.
 
 **Note:** this is "the leash" — PRD §1 names spoilage as **the dial tuned to hit the 24–48h return target**, jointly resolved with Thread #5 per §12. It is one of the two strong dials named in §5's economy caution (the other is Row 4).
 
@@ -101,9 +107,16 @@ time_to_next_tier = tierUpgradeCost / net_income_per_hour
 
 `time_to_next_tier` is the direct read for PRD §12 Thread #3's stated output question: *"does net income/hr grow faster than next-tier cost?"*
 
-| Variable | Definition | Value |
-|---|---|---|
-| `tierUpgradeCost` table | authored per (category, tierIndex); categories named in §5: rods, boats, equipment, storage capacity, restaurant tiers | `TBD (Giahy numbers session)` — authored, not derived |
+**Decided 2026-09-04 — storage capacity category only** (rods/boats/equipment/restaurant-tier costs remain `TBD`, PRD §12 Thread #6):
+
+| Tier | Name | Capacity | Spoilage slowdown | Cost |
+|---|---|---|---|---|
+| 0 | Boat cooler (starter) | 10 | 1× | — |
+| 1 | Icebox | 20 | 2× | 500g |
+| 2 | Chiller unit | 40 | 4× | 3,000g |
+| 3 | Cold storage room | 80 | 8× | 15,000g |
+
+Tier 3's 8× multiplier lands raw-fish spoilage at 12h — the top of PRD §4's "late game can coast 12h+" target. These costs are a first-pass authored guess, explicitly subject to revision once M8 gets a Studio pass and real plates/hour data exists — same status every other tuning number in this repo carries before its first playtest.
 
 **Note:** PRD §5's economy caution names **next-tier pricing** as the other strong dial (with spoilage rate) governing the income-vs-sink curve; the throughput cliff should land around week 6 per §12 Thread #3 and ROADMAP's M7 exit criteria.
 
@@ -147,14 +160,14 @@ PRD §12 Thread #3's actual deliverable is a 5-row **progression-stage** table (
 
 Row 5 (offline bank) doesn't map to a Thread #3 column directly — it's the reconciliation check for M9 (`OfflineBankCalculator`), built from the same shared variables.
 
-## Open items carried into M7 (Threads #3 + #5)
+## Open items still carried forward (Threads #3 + #5)
 
-Everything below remains `TBD (Giahy numbers session)` — nothing here should be inferred or estimated ahead of that session:
+Resolved 2026-09-04: raw-fish/cooked-portion `staleThreshold`/`spoiledThreshold` (tier-0 baseline) and the storage-tier `capacity`/`spoilageMultiplier`/`upgradeCost` ladder (Row 3, Row 4's storage category). Everything below remains `TBD (Giahy numbers session)` — nothing here should be inferred or estimated ahead of that session:
 
-- `WAGE_RATE`
-- `decayRate` per species/tier, `staleThreshold`, `spoiledThreshold`, storage-tier decay modifier
-- `throughputCap` per restaurant tier (both live and offline)
-- `tierUpgradeCost` table across all Purchasing categories (rods, boats, equipment, storage, restaurant tiers)
-- headcount and stage assumptions for the tutorial/new/mid/late/whale rows themselves
+- `WAGE_RATE` — inert until M11 gives a player `staffHeadcount > 0`; `OfflineBankCalculator.compute` (M9) short-circuits to a 0 net bank while headcount is 0, so this doesn't block M8/M9's code
+- `decayRate` per species (M6/M8 use one flat threshold per tier, not a per-species slope)
+- `throughputCap` per restaurant tier (both live and offline) — same "inert until M11" status as `WAGE_RATE`
+- `tierUpgradeCost` for the remaining Purchasing categories (rods, boats, equipment, restaurant tiers)
+- headcount and stage assumptions for the tutorial/new/mid/late/whale rows, and the full Thread #3 progression-stage validation table itself (does net income/hr beat next-tier cost) — a follow-up exercise once M8 has a Studio pass, not required to build the ladder above
 
 This document does not attempt to resolve, estimate, or default any of the above. Doing so would be a unilateral resolution of Open Thread #3, which PRD §3/§11 forbid.
