@@ -15,11 +15,15 @@
 -- hand-edit + Studio save afterward survives the next server start instead of being silently
 -- regenerated over. Delete that attribute (or the whole Terrain) to force a regeneration.
 --
--- Untested against real Terrain — there is no headless polyfill for Terrain:FillCylinder, so
--- nothing here could be verified by this session's usual rojo build/selene/stylua/lune loop
--- beyond "it's syntactically valid Luau that passes lint." Needs a real Studio look before
--- anything else in this file is trusted. Every size below is a first-pass guess (see
--- WorldConfig.lua's header) — expect to retune after actually seeing it.
+-- Checked once against real Terrain (2026-09-04, via Studio MCP in its documented read/playtest
+-- role — no authoring was done through it, only inspection/screenshots/console). A low, near-level
+-- camera angle made the beach/plateau discs read as a tall "wall" in one screenshot; a 90°
+-- CFrame.Angles rotation was tried as a fix and made it worse (confirmed a genuinely narrow
+-- vertical shaft), which means the original unrotated fills were correct all along and the "wall"
+-- was a grazing-angle perspective illusion — a thin, wide disc viewed nearly edge-on from a
+-- similar altitude foreshortens into what looks like a tall face. Reverted to unrotated CFrames.
+-- Still unverified: the exact island silhouette/proportions from a proper elevated angle, and
+-- every size in WorldConfig.lua (still first-pass guesses).
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

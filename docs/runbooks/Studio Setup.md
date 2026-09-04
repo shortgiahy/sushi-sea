@@ -21,15 +21,37 @@ label), creates `Workspace.IslandSpawn` (a `SpawnLocation`), then sets the attri
 regenerates over itself again. Delete the attribute (or delete `Terrain`/`RestaurantPlots`/
 `IslandSpawn` outright) to force a fresh regeneration.
 
-**⚠️ Unverified nuance — check this before relying on the above:** it's not confirmed whether
-Studio's Play/Run mode operates on the real `Workspace`/`Terrain` or a throwaway copy that gets
-discarded when you stop. If terrain generated during Play **does not persist** after stopping,
-the practical workflow is different: run `WorldGenerationService`'s generation logic once from the
-**command bar in Edit mode** (not by pressing Play), then save the place — that bakes the terrain
-into the actual saved file permanently, the same as if it had been hand-sculpted. If it **does**
-persist through a Play/Stop cycle, the script running automatically on every server start is
-sufficient and no manual step is needed. Confirm which is true the first time this runs and update
-this note.
+**✅ Confirmed 2026-09-04 (via Studio MCP, read/playtest use only — see below):** Play-mode changes
+do **not** persist. Pressing Play generated `Terrain`/`RestaurantPlots`/`IslandSpawn` correctly;
+stopping Play reverted `Workspace` back to the untouched pre-Play state (confirmed by inspecting
+Edit-mode `Workspace` immediately after stopping — the generated instances were gone, back to just
+the stock `Baseplate`/default `SpawnLocation`). This is a Studio-only testing artifact, not
+something a real published server does — each live server instance runs the script once at start
+and keeps its own generated world for the life of that server, which is the actual intended
+behavior and needs no extra step. It only matters for **Giahy's own Edit-mode work**: if you want
+the island visibly present while editing (to place other things relative to it, take marketing
+screenshots, etc.), Play/Stop won't leave it there. Run the generation once from the **command bar
+in Edit mode** instead, then save the place — that bakes it into the actual `.rbxl` permanently.
+
+**Also confirmed 2026-09-04:** the underlying `Terrain:FillCylinder` geometry is correct as
+written (unrotated `CFrame.new(x, y, z)`, no `CFrame.Angles` rotation needed) — a round grass
+plateau surrounded by a sand beach ring surrounded by ocean, roughly matching the intended shape,
+verified via screenshots from a proper elevated angle. A low, near-level camera angle in an
+earlier check made the beach/plateau discs look like a tall wall — that was a grazing-angle
+perspective illusion (a thin, wide disc viewed nearly edge-on from a similar altitude
+foreshortens dramatically), not a real shape bug; a `CFrame.Angles(90°, 0, 0)` rotation was tried
+as a fix based on that misread and made it measurably worse (a genuinely narrow vertical shaft),
+which is itself confirmation the original was right. `Plot_1`'s actual in-game position
+(`90, 7.5, 0`) matches its intended math exactly. Distant water rendering in a terraced/stepped
+pattern is Roblox's normal terrain LOD (level-of-detail) system simplifying far voxels for
+performance, not a bug.
+
+**How this was checked:** via the Roblox Studio MCP connection, strictly in its documented
+read/playtest role (`get_studio_state`, `search_game_tree`, `inspect_instance`,
+`start_stop_play`, `screen_capture`, `get_console_output`) — no code or assets were authored
+through it. The one fix this produced (reverting an unnecessary rotation) was made by editing the
+repo source and letting the already-running `rojo serve` sync it into Studio, same as every other
+change this project makes.
 
 **Tuning:** every size in `WorldConfig.lua` (ocean/island radii, plot count and spacing, plot
 size) is a first-pass placeholder, same status as every numeric guess elsewhere in this repo —
