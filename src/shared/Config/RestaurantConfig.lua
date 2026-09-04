@@ -22,9 +22,22 @@
 -- - WAGE_RATE_PER_HOUR_PER_STAFF stays flat across rarities (PRD §5: "wages scale with headcount,"
 --   not with rarity) and deliberately weak (PRD's economy caution: wages are a weak dial next to
 --   spoilage rate and next-tier pricing).
--- - Customer flow constants are placeholder pacing, NOT the real hidden traffic-stat formula
---   (M12's job, PRD §12 Thread #6) — spawn is a flat per-seat interval here, to be replaced once
---   M12 exists.
+-- - Customer flow constants are placeholder pacing; CUSTOMER_SPAWN_INTERVAL_SECONDS_PER_SEAT is
+--   the base interval TrafficStat.lua's multiplier scales (M12) — higher traffic shortens it.
+--
+-- M12 scope reasoning (PRD §12 Thread #6, "Yelp prestige formula" + "hidden traffic stat
+-- formula" — both explicitly unset, first-pass numbers here same as everything else):
+-- - PRESTIGE_POINTS_PER_SERVED_CUSTOMER only ever adds (PRD §4 Rating: prestige "never drops") —
+--   a walkout contributes nothing, it never subtracts. PRESTIGE_POINTS_PER_STAR sets how many
+--   served customers it takes to climb one star, linearly, clamped at MAX_STARS.
+-- - Traffic weights PRESTIGE_WEIGHT/HOSPITALITY_WEIGHT/COSMETICS_WEIGHT reflect PRD §4's stated
+--   inputs ("Yelp prestige + cosmetics + Hospitality"); prestige weighted heaviest (reputation
+--   drives walk-in traffic more than in-restaurant service skill). COSMETICS_WEIGHT is wired but
+--   always multiplied by 0 today — no cosmetics system exists yet, same "inert until that system
+--   lands" status WAGE_RATE carried before M11. MAX_HOSPITALITY_LEVEL_FOR_TRAFFIC normalizes
+--   Hospitality's level the same way CookConfig.MAX_COOKING_LEVEL_FOR_EXTRACTION normalizes
+--   Cooking — also inert today since no XP/leveling system exists yet (SkillConfig.lua is still
+--   an empty stub), so Hospitality sits at level 1 for every player.
 local RestaurantConfig = {}
 
 RestaurantConfig.RESTAURANT_TIERS = {
@@ -51,5 +64,16 @@ RestaurantConfig.CUSTOMER_RATING_SECONDS = 3
 RestaurantConfig.CUSTOMER_SPAWN_INTERVAL_SECONDS_PER_SEAT = 30
 
 RestaurantConfig.RESTAURANT_TICK_INTERVAL_SECONDS = 5
+
+RestaurantConfig.PRESTIGE_POINTS_PER_SERVED_CUSTOMER = 1
+RestaurantConfig.PRESTIGE_POINTS_PER_STAR = 50
+RestaurantConfig.MAX_STARS = 5
+
+RestaurantConfig.PRESTIGE_WEIGHT = 1.0
+RestaurantConfig.HOSPITALITY_WEIGHT = 0.5
+RestaurantConfig.COSMETICS_WEIGHT = 0.3
+RestaurantConfig.MAX_HOSPITALITY_LEVEL_FOR_TRAFFIC = 10
+RestaurantConfig.MIN_TRAFFIC_MULTIPLIER = 0.5
+RestaurantConfig.MAX_TRAFFIC_MULTIPLIER = 3.0
 
 return RestaurantConfig

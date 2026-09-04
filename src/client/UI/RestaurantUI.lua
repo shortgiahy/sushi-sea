@@ -4,8 +4,11 @@
 -- (one per rarity), and a live customer stage list — all mirroring server-pushed state
 -- (Restaurant_TierUpdate, Restaurant_StaffUpdate, Restaurant_CustomerUpdate), same "never compute
 -- locally" contract FreshnessUI already established. Positioned top-right so it never overlaps
--- BoatCookController's HUD (top-center) or FreshnessUI's panel (top-left). Prestige bar and Yelp
--- app are M12 scope (Yelp prestige formula is still PRD §12 Thread #6, unset) — not built here.
+-- BoatCookController's HUD (top-center) or FreshnessUI's panel (top-left).
+--
+-- M12 addition: a star-rating line (TrafficStat.starsFor, server-resolved and pushed alongside the
+-- customer snapshot) stands in for the full "Yelp app" — that's a bigger UI surface than this
+-- gray-box panel needs yet; the number itself is the part M12's task table actually calls for.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -16,6 +19,7 @@ local localPlayer = Players.LocalPlayer
 local RARITY_ORDER = { "common", "rare", "legendary" }
 
 local tierLabel: TextLabel? = nil
+local starsLabel: TextLabel? = nil
 local upgradeTierButton: TextButton? = nil
 local staffLabel: TextLabel? = nil
 local hireButtons: { [string]: TextButton } = {}
@@ -26,6 +30,7 @@ local hireStaffRemote: RemoteEvent? = nil
 
 local restaurantTierState = { tier = 0, name = nil :: string?, seats = 0, nextTierCost = 2000 :: number? }
 local staffCount = 0
+local currentStars = 1
 
 local function _clearContainer(container: Frame): ()
     for _, child in container:GetChildren() do
@@ -76,9 +81,21 @@ local function _buildGui(): ()
     tier.Text = ""
     tier.Parent = root
 
+    local stars = Instance.new("TextLabel")
+    stars.Name = "Stars"
+    stars.Position = UDim2.fromOffset(0, 20)
+    stars.Size = UDim2.new(1, 0, 0, 18)
+    stars.BackgroundTransparency = 1
+    stars.TextColor3 = Color3.fromRGB(240, 210, 100)
+    stars.TextXAlignment = Enum.TextXAlignment.Left
+    stars.Font = Enum.Font.SourceSans
+    stars.TextSize = 15
+    stars.Text = ""
+    stars.Parent = root
+
     local upgradeTier = Instance.new("TextButton")
     upgradeTier.Name = "UpgradeTierButton"
-    upgradeTier.Position = UDim2.fromOffset(0, 20)
+    upgradeTier.Position = UDim2.fromOffset(0, 42)
     upgradeTier.Size = UDim2.fromOffset(220, 28)
     upgradeTier.BackgroundColor3 = Color3.fromRGB(80, 60, 100)
     upgradeTier.TextColor3 = Color3.new(1, 1, 1)
@@ -89,7 +106,7 @@ local function _buildGui(): ()
 
     local staff = Instance.new("TextLabel")
     staff.Name = "Staff"
-    staff.Position = UDim2.fromOffset(0, 56)
+    staff.Position = UDim2.fromOffset(0, 78)
     staff.Size = UDim2.new(1, 0, 0, 18)
     staff.BackgroundTransparency = 1
     staff.TextColor3 = Color3.new(1, 1, 1)
@@ -99,10 +116,11 @@ local function _buildGui(): ()
     staff.Text = "Staff: 0"
     staff.Parent = root
 
+    local hireButtonsTop = 98
     for i, rarity in RARITY_ORDER do
         local hireButton = Instance.new("TextButton")
         hireButton.Name = "Hire_" .. rarity
-        hireButton.Position = UDim2.fromOffset(0, 76 + (i - 1) * 30)
+        hireButton.Position = UDim2.fromOffset(0, hireButtonsTop + (i - 1) * 30)
         hireButton.Size = UDim2.fromOffset(220, 26)
         hireButton.BackgroundColor3 = Color3.fromRGB(60, 90, 70)
         hireButton.TextColor3 = Color3.new(1, 1, 1)
@@ -120,7 +138,7 @@ local function _buildGui(): ()
 
     local customersHeader = Instance.new("TextLabel")
     customersHeader.Name = "CustomersHeader"
-    customersHeader.Position = UDim2.fromOffset(0, 76 + #RARITY_ORDER * 30 + 6)
+    customersHeader.Position = UDim2.fromOffset(0, hireButtonsTop + #RARITY_ORDER * 30 + 6)
     customersHeader.Size = UDim2.new(1, 0, 0, 16)
     customersHeader.BackgroundTransparency = 1
     customersHeader.TextColor3 = Color3.new(1, 1, 1)
@@ -132,7 +150,7 @@ local function _buildGui(): ()
 
     local customers = Instance.new("Frame")
     customers.Name = "CustomersList"
-    customers.Position = UDim2.fromOffset(0, 76 + #RARITY_ORDER * 30 + 24)
+    customers.Position = UDim2.fromOffset(0, hireButtonsTop + #RARITY_ORDER * 30 + 24)
     customers.Size = UDim2.new(1, 0, 0, 120)
     customers.BackgroundTransparency = 1
     customers.Parent = root
@@ -144,6 +162,7 @@ local function _buildGui(): ()
     screenGui.Parent = playerGui
 
     tierLabel = tier
+    starsLabel = stars
     upgradeTierButton = upgradeTier
     staffLabel = staff
     customerContainer = customers
@@ -179,9 +198,16 @@ local function _refreshStaffDisplay(): ()
     end
 end
 
+local function _refreshStarsDisplay(): ()
+    if starsLabel then
+        starsLabel.Text = ("Yelp: %.1f / 5.0"):format(currentStars)
+    end
+end
+
 type RestaurantTierUpdate = { tier: number, name: string?, seats: number, nextTierCost: number? }
 type StaffRosterEntry = { id: string, rarity: string, hiredAt: number }
 type CustomerSnapshotEntry = { id: string, stage: string }
+type CustomerUpdate = { customers: { CustomerSnapshotEntry }, prestigePoints: number, stars: number }
 
 local function _onTierUpdate(payload: RestaurantTierUpdate): ()
     restaurantTierState = payload
@@ -193,7 +219,10 @@ local function _onStaffUpdate(payload: { roster: { StaffRosterEntry } }): ()
     _refreshStaffDisplay()
 end
 
-local function _onCustomerUpdate(payload: { customers: { CustomerSnapshotEntry } }): ()
+local function _onCustomerUpdate(payload: CustomerUpdate): ()
+    currentStars = payload.stars
+    _refreshStarsDisplay()
+
     if not customerContainer then
         return
     end
@@ -220,6 +249,7 @@ function RestaurantUI.init(): ()
     _buildGui()
     _refreshTierDisplay()
     _refreshStaffDisplay()
+    _refreshStarsDisplay()
 
     tierUpdateRemote.OnClientEvent:Connect(_onTierUpdate)
     staffUpdateRemote.OnClientEvent:Connect(_onStaffUpdate)

@@ -2,12 +2,15 @@
 --
 -- M10 scope: CustomerFlow.lua owns the pure stage-transition logic; this file owns everything it
 -- deliberately doesn't know about — the seating gate, popping/resolving a cookedPortions entry
--- when fulfillment can proceed, and crediting gold at payment. Spawn rate is a flat placeholder
--- (RestaurantConfig.CUSTOMER_SPAWN_INTERVAL_SECONDS_PER_SEAT), NOT the real hidden traffic-stat
--- formula — that's M12's job (PRD §12 Thread #6); this just needs *a* rate to make the loop
--- observable and testable. Rating is a stub: PRD's Yelp prestige formula is also unset (Thread
--- #6), so a "left" customer is removed without touching `restaurant.prestigePoints` — M12 wires
--- real scoring later.
+-- when fulfillment can proceed, and crediting gold at payment.
+--
+-- M12 addition: TrafficStat.lua owns prestige→stars and the traffic multiplier; this file reads
+-- `restaurant.prestigePoints` (only ever incremented on "paid," per PRD §4's "never drops") and
+-- scales the spawn interval by the resulting multiplier — replacing M10's flat per-seat rate with
+-- the real hidden traffic-stat formula (PRD §12 Thread #6). `cosmeticsScore` is passed as 0 (no
+-- cosmetics system exists yet); Hospitality level is read from PlayerData but sits at 1 for every
+-- player until a leveling system exists (SkillConfig.lua is still an empty stub) — both wired, both
+-- inert until their systems land, same status WAGE_RATE carried before M11.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -16,6 +19,7 @@ local HttpService = game:GetService("HttpService")
 local CustomerFlow = require(ServerStorage.Modules.CustomerFlow)
 local PlateValueResolver = require(ServerStorage.Modules.PlateValueResolver)
 local FishTable = require(ServerStorage.Modules.FishTable)
+local TrafficStat = require(ServerStorage.Modules.TrafficStat)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
 local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
@@ -24,6 +28,17 @@ local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
 local customerUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_CustomerUpdate
 local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
+
+local TRAFFIC_TUNING: TrafficStat.TrafficTuning = {
+    PRESTIGE_POINTS_PER_STAR = RestaurantConfig.PRESTIGE_POINTS_PER_STAR,
+    MAX_STARS = RestaurantConfig.MAX_STARS,
+    PRESTIGE_WEIGHT = RestaurantConfig.PRESTIGE_WEIGHT,
+    HOSPITALITY_WEIGHT = RestaurantConfig.HOSPITALITY_WEIGHT,
+    COSMETICS_WEIGHT = RestaurantConfig.COSMETICS_WEIGHT,
+    MAX_HOSPITALITY_LEVEL_FOR_TRAFFIC = RestaurantConfig.MAX_HOSPITALITY_LEVEL_FOR_TRAFFIC,
+    MIN_TRAFFIC_MULTIPLIER = RestaurantConfig.MIN_TRAFFIC_MULTIPLIER,
+    MAX_TRAFFIC_MULTIPLIER = RestaurantConfig.MAX_TRAFFIC_MULTIPLIER,
+}
 
 -- Same tuning-table construction EconomyService.server.lua already builds for the boat serve
 -- verb — small enough duplication that a shared module would be a premature abstraction over
@@ -84,10 +99,14 @@ local function _tickPlayer(player: Player, data: any, now: number): ()
         return -- tier 0 (boat only) — no restaurant, no customers
     end
 
+    local stars = TrafficStat.starsFor(data.restaurant.prestigePoints, TRAFFIC_TUNING)
+    local trafficMultiplier = TrafficStat.multiplierFor(stars, data.skills.hospitality.level, 0, TRAFFIC_TUNING)
+
     local customers = activeCustomers[player.UserId] or {}
 
     if #customers < tierData.seats then
-        local spawnInterval = RestaurantConfig.CUSTOMER_SPAWN_INTERVAL_SECONDS_PER_SEAT / tierData.seats
+        local spawnInterval = (RestaurantConfig.CUSTOMER_SPAWN_INTERVAL_SECONDS_PER_SEAT / tierData.seats)
+            / trafficMultiplier
         local lastSpawn = lastSpawnAt[player.UserId] or 0
         if now - lastSpawn >= spawnInterval then
             table.insert(customers, CustomerFlow.new(HttpService:GenerateGUID(false), now))
@@ -106,6 +125,7 @@ local function _tickPlayer(player: Player, data: any, now: number): ()
             local value = pendingPlateValue[updated.id] or 0
             pendingPlateValue[updated.id] = nil
             data.economy.gold += value
+            data.restaurant.prestigePoints += RestaurantConfig.PRESTIGE_POINTS_PER_SERVED_CUSTOMER
             goldUpdateRemote:FireClient(player, data.economy.gold)
         end
 
@@ -122,7 +142,11 @@ local function _tickPlayer(player: Player, data: any, now: number): ()
     for _, customer in survivors do
         table.insert(snapshot, { id = customer.id, stage = customer.stage })
     end
-    customerUpdateRemote:FireClient(player, { customers = snapshot })
+    customerUpdateRemote:FireClient(player, {
+        customers = snapshot,
+        prestigePoints = data.restaurant.prestigePoints,
+        stars = TrafficStat.starsFor(data.restaurant.prestigePoints, TRAFFIC_TUNING),
+    })
 end
 
 task.spawn(function()
