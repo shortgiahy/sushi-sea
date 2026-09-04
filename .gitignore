@@ -7,3 +7,5 @@ ServerPackages/
 DevPackages/
 sourcemap.json
 .DS_Store
+__pycache__/
+*.pyc

@@ -1,0 +1,1 @@
+-- StaffService: NPC cook/serve AI at brick-and-mortar tier; drives the same ConversionModule as the player (PRD §7.6)

@@ -18,6 +18,13 @@
 -- M5 addition: this file also validates the boat serve verb's Player_ServePlate and resolves
 -- served_plate_value via PlateValueResolver.lua (PRD §5's one faucet) — same "lives alongside the
 -- existing verb-input validation rather than a new service file" reasoning as M4's cook verb.
+--
+-- M14 addition: a cast's bite can resolve into a legendary encounter instead of a normal fight —
+-- WeatherAccess (read-only, mirrors PlayerDataAccess) tells this file whether the cast's zone is
+-- the active storm's zone; WeatherRoll resolves the odds roll; LegendaryFight computes each
+-- phase's harder FightConfig. The fight simulation itself is NOT reimplemented — every phase still
+-- runs through the exact same FishingCatch.newFight/applyReelInput/tick a normal catch uses (PRD
+-- §4: "not a bespoke combat system"), just with a per-phase config instead of the shared FIGHT_CONFIG.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -28,9 +35,15 @@ local ConversionModule = require(ServerStorage.Modules.ConversionModule)
 local PlateValueResolver = require(ServerStorage.Modules.PlateValueResolver)
 local FishTable = require(ServerStorage.Modules.FishTable)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
+local WeatherAccess = require(ServerStorage.Modules.WeatherAccess)
+local WeatherRoll = require(ServerStorage.Modules.WeatherRoll)
+local LegendaryFight = require(ServerStorage.Modules.LegendaryFight)
+local DryAgingLocker = require(ServerStorage.Modules.DryAgingLocker)
 local FishingConfig = require(ReplicatedStorage.Config.FishingConfig)
 local CookConfig = require(ReplicatedStorage.Config.CookConfig)
 local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
+local WeatherConfig = require(ReplicatedStorage.Config.WeatherConfig)
+local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
 local FishSpecies = require(ReplicatedStorage.Modules.FishSpecies)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
@@ -38,11 +51,39 @@ local castLineRemote: RemoteEvent = RemoteEvents.Player_CastLine
 local reelInputRemote: RemoteEvent = RemoteEvents.Player_ReelInput
 local biteWindowRemote: RemoteEvent = RemoteEvents.Fishing_BiteWindow
 local fightResultRemote: RemoteEvent = RemoteEvents.Fishing_FightResult
+local legendaryPhaseAdvancedRemote: RemoteEvent = RemoteEvents.Fishing_LegendaryPhaseAdvanced
 local cookTraceRemote: RemoteEvent = RemoteEvents.Player_CookTrace
 local cookStrokeRemote: RemoteEvent = RemoteEvents.Player_CookStroke
 local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolved
 local servePlateRemote: RemoteEvent = RemoteEvents.Player_ServePlate
 local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
+local cashUpdateRemote: RemoteEvent = RemoteEvents.Economy_CashUpdate
+local purchaseStorageTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseStorageTier
+local storageTierUpdateRemote: RemoteEvent = RemoteEvents.Storage_TierUpdate
+local placeInAgingLockerRemote: RemoteEvent = RemoteEvents.Player_PlaceInAgingLocker
+local pullFromLockerRemote: RemoteEvent = RemoteEvents.Player_PullFromLocker
+local purchaseAgingLockerTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseAgingLockerTier
+local agingLockerUpdateRemote: RemoteEvent = RemoteEvents.Aging_LockerUpdate
+local mountTrophyRemote: RemoteEvent = RemoteEvents.Player_MountTrophy
+local giftFishRemote: RemoteEvent = RemoteEvents.Player_GiftFish
+local trophyUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_TrophyUpdate
+
+local LEGENDARY_TUNING: LegendaryFight.LegendaryTuning = {
+    PHASE_COUNT = WeatherConfig.LEGENDARY_PHASE_COUNT,
+    PHASE_WIDTH_MULTIPLIER = WeatherConfig.LEGENDARY_PHASE_WIDTH_MULTIPLIER,
+    MIN_CATCH_BOX_WIDTH = WeatherConfig.LEGENDARY_MIN_CATCH_BOX_WIDTH,
+    LEVEL_RELIEF_PER_LEVEL = WeatherConfig.LEGENDARY_LEVEL_RELIEF_PER_LEVEL,
+    MAX_LEVEL_RELIEF = WeatherConfig.LEGENDARY_MAX_LEVEL_RELIEF,
+    MAX_FISHING_LEVEL_FOR_RELIEF = WeatherConfig.LEGENDARY_MAX_FISHING_LEVEL_FOR_RELIEF,
+}
+
+local AGING_TUNING: DryAgingLocker.AgingTuning = {
+    PEAK_MULTIPLIER = AgingConfig.PEAK_MULTIPLIER,
+    PEAK_SECONDS = AgingConfig.PEAK_SECONDS,
+    MUTATION_CHANCE = AgingConfig.MUTATION_CHANCE,
+    MIN_MUTATION_BONUS = AgingConfig.MIN_MUTATION_BONUS,
+    MAX_MUTATION_BONUS = AgingConfig.MAX_MUTATION_BONUS,
+}
 
 -- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
 -- (see EconomyConfig.lua's header for why this isn't duplicated there) rather than defining a
@@ -77,6 +118,15 @@ type PlayerFishingState = {
     pendingCast: boolean,
     lastReelInputAt: number?,
     fight: FishingCatch.FightState?,
+    -- M14 additions: pendingCastZone is stashed at cast time (WeatherRoll.zoneFor) so the bite
+    -- timer, which fires later, can check it against the then-current storm. activeFightConfig is
+    -- the FightConfig actually driving `fight` right now — FIGHT_CONFIG for a normal fight, or a
+    -- phase-specific override for a legendary one. legendaryPhaseIndex/legendaryType are set only
+    -- while a legendary encounter is in progress.
+    pendingCastZone: string?,
+    activeFightConfig: FishingCatch.FightConfig?,
+    legendaryPhaseIndex: number?,
+    legendaryType: string?,
 }
 
 local playerStates: { [number]: PlayerFishingState } = {}
@@ -84,10 +134,30 @@ local playerStates: { [number]: PlayerFishingState } = {}
 local function _stateFor(userId: number): PlayerFishingState
     local state = playerStates[userId]
     if not state then
-        state = { lastCastAt = nil, pendingCast = false, lastReelInputAt = nil, fight = nil }
+        state = {
+            lastCastAt = nil,
+            pendingCast = false,
+            lastReelInputAt = nil,
+            fight = nil,
+            pendingCastZone = nil,
+            activeFightConfig = nil,
+            legendaryPhaseIndex = nil,
+            legendaryType = nil,
+        }
         playerStates[userId] = state
     end
     return state
+end
+
+-- Phase 1 = the base FIGHT_CONFIG's own width/duration; later phases narrow the catch box
+-- (LegendaryFight.catchBoxWidthFor) and stretch the duration to WeatherConfig's legendary phase
+-- length. table.clone so mutating the copy never touches the shared FIGHT_CONFIG.
+local function _legendaryFightConfigFor(phaseIndex: number, fishingLevel: number): FishingCatch.FightConfig
+    local config = table.clone(FIGHT_CONFIG)
+    config.CATCH_BOX_WIDTH =
+        LegendaryFight.catchBoxWidthFor(phaseIndex, fishingLevel, FishingConfig.CATCH_BOX_WIDTH, LEGENDARY_TUNING)
+    config.FIGHT_DURATION_SECONDS = WeatherConfig.LEGENDARY_PHASE_DURATION_SECONDS
+    return config
 end
 
 -- Cook-verb pending state (M4). Separate table from playerStates/PlayerFishingState — cooking and
@@ -121,15 +191,26 @@ local function _getCharacterRoot(player: Player): BasePart?
     return character and (character:FindFirstChild("HumanoidRootPart") :: BasePart?)
 end
 
+-- Forward-declared: _endFight (M14's phase-advance branch) and _scheduleTimeout call each other —
+-- same mutual-recursion shape BoatCookController.lua's trace/stroke chain already documents.
+local _scheduleTimeout: (player: Player, state: PlayerFishingState, fightId: string, fightDurationSeconds: number) -> ()
+
 -- Deferred from M3 (BUILD_LOG.md M3 entry): writes the caught fish into PlayerDataService's
 -- inventory via PlayerDataAccess, the cross-service access pattern M4 introduces (see that
 -- module's header). Returns the generated fishId, or nil if PlayerData isn't loaded yet (e.g. a
--- race right at join) — the catch still displays client-side in that case, it just can't be
--- cooked, matching this fight-sim's existing best-effort stance on transient player state.
+-- race right at join) or the player's storage is already at capacity (M8, PRD §4's "forces
+-- restocking" leash extends to a hard cap, not just a timer) — the catch still displays
+-- client-side in either case, it just can't be cooked, matching this fight-sim's existing
+-- best-effort stance on transient/edge-case player state.
 local function _writeCaughtFishToInventory(player: Player, speciesId: string): string?
     local dataService = PlayerDataAccess.getInstance()
     local data = dataService and dataService:get(player.UserId)
     if not data then
+        return nil
+    end
+
+    local tierData = EconomyConfig.STORAGE_TIERS[data.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    if #data.inventory >= tierData.capacity then
         return nil
     end
 
@@ -142,6 +223,47 @@ local function _endFight(player: Player, state: PlayerFishingState, outcome: Fis
     local fight = state.fight
     state.fight = nil
     if not fight then
+        return
+    end
+
+    -- M14: a legendary encounter in progress. Succeeding a non-final phase advances instead of
+    -- ending; anything else (a final-phase catch, or a failure at any phase) terminates the whole
+    -- encounter here — no partial credit for a partly-fought legendary (PRD §4: "no buy-in, no
+    -- loss penalty. Losing costs nothing but the moment").
+    if state.legendaryPhaseIndex then
+        if outcome == "caught" and not LegendaryFight.isFinalPhase(state.legendaryPhaseIndex, LEGENDARY_TUNING) then
+            local nextPhase = state.legendaryPhaseIndex + 1
+            local dataService = PlayerDataAccess.getInstance()
+            local data = dataService and dataService:get(player.UserId)
+            local fishingLevel = if data then data.skills.fishing.level else 1
+            local nextConfig = _legendaryFightConfigFor(nextPhase, fishingLevel)
+
+            state.legendaryPhaseIndex = nextPhase
+            state.activeFightConfig = nextConfig
+            state.fight = FishingCatch.newFight(os.clock(), fight.fightId)
+
+            legendaryPhaseAdvancedRemote:FireClient(
+                player,
+                fight.fightId,
+                nextPhase,
+                nextConfig.CATCH_BOX_WIDTH,
+                nextConfig.FIGHT_DURATION_SECONDS
+            )
+            _scheduleTimeout(player, state, fight.fightId, nextConfig.FIGHT_DURATION_SECONDS)
+            return
+        end
+
+        local legendaryType = state.legendaryType
+        state.legendaryPhaseIndex = nil
+        state.legendaryType = nil
+        state.activeFightConfig = nil
+
+        if outcome == "caught" then
+            local fishId = legendaryType and _writeCaughtFishToInventory(player, legendaryType)
+            fightResultRemote:FireClient(player, fight.fightId, "caught", legendaryType, "legendary", fishId)
+        else
+            fightResultRemote:FireClient(player, fight.fightId, outcome, nil, nil, nil)
+        end
         return
     end
 
@@ -165,15 +287,22 @@ end
 
 -- Schedules the fight's own timeout resolution independent of further client input — if the
 -- client stops sending Player_ReelInput entirely (dropped connection, exploiter silence), the
--- fight still resolves instead of leaving state.fight dangling forever.
-local function _scheduleTimeout(player: Player, state: PlayerFishingState, fightId: string): ()
-    local budgetSeconds = FishingConfig.HOOK_REACTION_WINDOW_SECONDS + FishingConfig.FIGHT_DURATION_SECONDS
+-- fight still resolves instead of leaving state.fight dangling forever. `fightDurationSeconds` is
+-- the currently-active phase's duration (M14: legendary phases run longer than a normal fight),
+-- not always FishingConfig.FIGHT_DURATION_SECONDS.
+_scheduleTimeout = function(
+    player: Player,
+    state: PlayerFishingState,
+    fightId: string,
+    fightDurationSeconds: number
+): ()
+    local budgetSeconds = FishingConfig.HOOK_REACTION_WINDOW_SECONDS + fightDurationSeconds
     task.delay(budgetSeconds + 0.5, function()
         local fight = state.fight
         if not fight or fight.fightId ~= fightId then
             return
         end
-        local _, outcome = FishingCatch.tick(fight, os.clock(), FIGHT_CONFIG)
+        local _, outcome = FishingCatch.tick(fight, os.clock(), state.activeFightConfig or FIGHT_CONFIG)
         if outcome ~= "ongoing" then
             _endFight(player, state, outcome)
         end
@@ -200,16 +329,47 @@ local function _startBiteTimer(player: Player, state: PlayerFishingState): ()
             return -- a stray timer from an already-superseded cast cycle; should not happen, but cheap to guard
         end
 
+        -- M14: weather-triggered legendary roll. "Weather-triggered, not summonable" (PRD §4) is
+        -- read literally — this can only succeed while a storm is active AND the cast landed in
+        -- that storm's zone; there is no separate ambient/baseline chance outside that condition.
+        local storm = WeatherAccess.getCurrentStorm()
+        local inActiveZone = storm ~= nil and state.pendingCastZone ~= nil and state.pendingCastZone == storm.zone
+        local legendaryOdds = if inActiveZone
+            then WeatherConfig.BASELINE_LEGENDARY_ODDS_PER_CAST * WeatherConfig.IN_ZONE_LEGENDARY_ODDS_MULTIPLIER
+            else 0
+        local isLegendary = inActiveZone and WeatherRoll.shouldTriggerLegendary(legendaryOdds)
+
+        local fightConfig = FIGHT_CONFIG
+        if isLegendary then
+            local dataService = PlayerDataAccess.getInstance()
+            local data = dataService and dataService:get(player.UserId)
+            local fishingLevel = if data then data.skills.fishing.level else 1
+            fightConfig = _legendaryFightConfigFor(1, fishingLevel)
+            state.legendaryPhaseIndex = 1
+            state.legendaryType = (storm :: WeatherAccess.Storm).legendaryType
+        else
+            state.legendaryPhaseIndex = nil
+            state.legendaryType = nil
+        end
+        state.activeFightConfig = fightConfig
+
         local fightId = HttpService:GenerateGUID(false)
         state.fight = FishingCatch.newFight(os.clock(), fightId)
         warn(
-            ("[EconomyService][debug] %s: bite timer fired after %.1fs, firing Fishing_BiteWindow"):format(
+            ("[EconomyService][debug] %s: bite timer fired after %.1fs, firing Fishing_BiteWindow%s"):format(
                 player.Name,
-                waitSeconds
+                waitSeconds,
+                if isLegendary then " (LEGENDARY)" else ""
             )
         )
-        biteWindowRemote:FireClient(player, fightId)
-        _scheduleTimeout(player, state, fightId)
+        biteWindowRemote:FireClient(
+            player,
+            fightId,
+            fightConfig.CATCH_BOX_WIDTH,
+            fightConfig.FIGHT_DURATION_SECONDS,
+            isLegendary
+        )
+        _scheduleTimeout(player, state, fightId, fightConfig.FIGHT_DURATION_SECONDS)
     end)
 end
 
@@ -267,6 +427,7 @@ local function _onCastLine(player: Player, payload: any): ()
 
     state.lastCastAt = now
     state.pendingCast = true
+    state.pendingCastZone = WeatherRoll.zoneFor(location, WeatherConfig.ZONE_SIZE_STUDS)
     warn(("[EconomyService][debug] %s: cast ACCEPTED, waiting on bite timer"):format(player.Name))
     _startBiteTimer(player, state)
 end
@@ -291,7 +452,8 @@ local function _onReelInput(player: Player, payload: any): ()
     end
     state.lastReelInputAt = now
 
-    local updatedFight, outcome = FishingCatch.applyReelInput(fight, tension, now, FIGHT_CONFIG)
+    local updatedFight, outcome =
+        FishingCatch.applyReelInput(fight, tension, now, state.activeFightConfig or FIGHT_CONFIG)
     state.fight = updatedFight
 
     if outcome ~= "ongoing" then
@@ -328,6 +490,10 @@ local function _resolveCook(player: Player, data: any, fish: any, traceAccuracy:
     -- grade) so BoatCookController can later name a specific portion in Player_ServePlate — the
     -- serve verb resolves one cookedPortions entry at a time, the same shape as _onCookStroke
     -- addressing one loin at a time.
+    -- M15: `fish.dryAgeMutation` is only set when this fish was just pulled from the aging locker
+    -- (see _onPullFromLocker) — carried forward onto every resulting portion so
+    -- PlateValueResolver.resolve sees it at serve time. nil for an ordinarily-caught fish, same as
+    -- before this addition.
     local now = os.time()
     local resolvedPortions: { { id: string, grade: string } } = {}
     for _, portion in portions do
@@ -336,6 +502,7 @@ local function _resolveCook(player: Player, data: any, fish: any, traceAccuracy:
             species = fish.species,
             grade = portion.grade,
             cookedAt = now,
+            dryAgeMutation = fish.dryAgeMutation,
         }
         table.insert(data.cookedPortions, cookedPortion)
         table.insert(resolvedPortions, { id = cookedPortion.id, grade = cookedPortion.grade })
@@ -385,6 +552,12 @@ local function _onCookTrace(player: Player, payload: any): ()
     local species = FishSpecies.getById(fish.species)
     if not species then
         return
+    end
+    if
+        species.rarity == "legendary"
+        and data.skills.cooking.level < CookConfig.MIN_COOKING_LEVEL_FOR_LEGENDARY_BUTCHER
+    then
+        return -- not Cooking-gated open yet (M16, PRD §4) — mount it instead, or wait to level up
     end
 
     if species.prepTier == "quick" or species.loinCount <= 0 then
@@ -456,7 +629,7 @@ local function _onCookStroke(player: Player, payload: any): ()
     _resolveCook(player, data, fish, pending.traceAccuracy, pending.strokeQuality)
 end
 
--- Boat serve verb (M5, PRD §4/§5): pure delivery — resolves one cookedPortions entry into gold
+-- Boat serve verb (M5, PRD §4/§5): pure delivery — resolves one cookedPortions entry into cash
 -- via PlateValueResolver and removes it from inventory. No order matching, no plating minigame;
 -- the "verb" is the button press itself (docs/design/cook-verb.md's serve-verb scope).
 local function _onServePlate(player: Player, payload: any): ()
@@ -509,18 +682,280 @@ local function _onServePlate(player: Player, payload: any): ()
         cutBase = cutBase,
         cookingLevel = data.skills.cooking.level,
         freshnessElapsedSeconds = freshnessElapsedSeconds,
+        dryAgeMutation = portion.dryAgeMutation,
     }, PLATE_VALUE_TUNING)
 
     table.remove(data.cookedPortions, portionIndex)
-    data.economy.gold += plateValue
+    data.economy.cash += plateValue
 
     plateResolvedRemote:FireClient(player, plateValue, breakdown)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
+end
+
+-- Storage tier purchase (M8, PRD §12 Thread #5 partial resolution). No dedicated PurchasingService
+-- exists in PRD §7.1's file tree — same "lives alongside the existing verb-input validation
+-- rather than inventing an unlisted service file" reasoning M4/M5's headers already documented for
+-- their own Player_* handlers. One tier per press, no batching, matching every other verb here.
+local function _onPurchaseStorageTier(player: Player): ()
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local nextTier = data.storage.tier + 1
+    local tierData = EconomyConfig.STORAGE_TIERS[nextTier]
+    if not tierData then
+        return -- already at EconomyConfig.MAX_STORAGE_TIER — expected-failure path, not an error
+    end
+    if data.economy.cash < tierData.upgradeCost then
+        return -- can't afford it — expected-failure path (PRD §8), not an error
+    end
+
+    data.economy.cash -= tierData.upgradeCost
+    data.storage.tier = nextTier
+
+    cashUpdateRemote:FireClient(player, data.economy.cash)
+    local afterNextTierData = EconomyConfig.STORAGE_TIERS[nextTier + 1]
+    storageTierUpdateRemote:FireClient(player, {
+        tier = data.storage.tier,
+        name = tierData.name,
+        capacity = tierData.capacity,
+        nextTierCost = if afterNextTierData then afterNextTierData.upgradeCost else nil,
+    })
+end
+
+local function _pushAgingLockerUpdate(player: Player, data: any): ()
+    local tierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    local nextTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier + 1]
+    local locker = {}
+    for _, fish in data.agingLocker do
+        table.insert(locker, { slot = fish.slot, species = fish.species, placedAt = fish.placedAt })
+    end
+    agingLockerUpdateRemote:FireClient(player, {
+        tier = data.agingLockerEquipment.tier,
+        slots = if tierData then tierData.slots else 0,
+        nextTierCost = if nextTierData then nextTierData.upgradeCost else nil,
+        locker = locker,
+    })
+end
+
+-- Aging locker equipment purchase (M15). Same "lives alongside the existing verb-input validation
+-- rather than inventing an unlisted service file" reasoning as the storage tier purchase above —
+-- yet another distinct Purchasing category, so it sits next to that one.
+local function _onPurchaseAgingLockerTier(player: Player): ()
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local nextTier = data.agingLockerEquipment.tier + 1
+    local tierData = AgingConfig.LOCKER_TIERS[nextTier]
+    if not tierData then
+        return -- already at AgingConfig.MAX_LOCKER_TIER — expected-failure path, not an error
+    end
+    if data.economy.cash < tierData.upgradeCost then
+        return
+    end
+
+    data.economy.cash -= tierData.upgradeCost
+    data.agingLockerEquipment.tier = nextTier
+
+    cashUpdateRemote:FireClient(player, data.economy.cash)
+    _pushAgingLockerUpdate(player, data)
+end
+
+-- Place a raw fish on the aging track (M15, PRD §4: "leaves the spoilage track and enters the
+-- aging track"). Slot numbers are the lowest unused integer in [1, tierData.slots] — reused once
+-- freed, not a monotonically increasing counter, so a full-then-partially-emptied locker doesn't
+-- run out of representable slot numbers.
+local function _onPlaceInAgingLocker(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    if type(fishId) ~= "string" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local tierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    if not tierData or #data.agingLocker >= tierData.slots then
+        return -- no locker owned yet, or it's full — expected-failure path, not an error
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in data.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local usedSlots = {}
+    for _, entry in data.agingLocker do
+        usedSlots[entry.slot] = true
+    end
+    local slot = 1
+    while usedSlots[slot] do
+        slot += 1
+    end
+
+    table.remove(data.inventory, fishIndex)
+    table.insert(data.agingLocker, { slot = slot, species = fish.species, placedAt = os.time() })
+
+    _pushAgingLockerUpdate(player, data)
+end
+
+-- Pull a fish back off the aging track (M15, PRD §7.2 `Player_PullFromLocker — {slot}`): resolves
+-- the aging multiplier + rare mutation roll once, here, and stamps it onto the fish as it re-enters
+-- raw inventory — re-entering the spoilage track with a fresh `caughtAt`, since it left that track
+-- entirely while aging (PRD §4) rather than having spoiled invisibly the whole time.
+local function _onPullFromLocker(player: Player, payload: any): ()
+    local slot = if typeof(payload) == "table" then payload.slot else nil
+    if type(slot) ~= "number" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local lockerIndex, agingFish = nil, nil
+    for i, entry in data.agingLocker do
+        if entry.slot == slot then
+            lockerIndex, agingFish = i, entry
+            break
+        end
+    end
+    if not agingFish then
+        return -- empty slot, or never existed — expected-failure path, not an error
+    end
+
+    local agedSeconds = math.max(os.time() - agingFish.placedAt, 0)
+    local dryAgeMutation = DryAgingLocker.resolveDryAgeMutation(agedSeconds, AGING_TUNING)
+
+    table.remove(data.agingLocker, lockerIndex)
+    table.insert(data.inventory, {
+        id = HttpService:GenerateGUID(false),
+        species = agingFish.species,
+        caughtAt = os.time(),
+        dryAgeMutation = dryAgeMutation,
+    })
+
+    _pushAgingLockerUpdate(player, data)
+end
+
+-- Trophy mount (M16, PRD §4: "pure public flex, decay-free, and goal-markers for catches you
+-- can't yet butcher"). Restricted to legendary rarity — the design explicitly frames mounts as the
+-- alternative to butchering a legendary you're not Cooking-level-gated to process yet, not a
+-- general-purpose display case for any catch.
+local function _onMountTrophy(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    if type(fishId) ~= "string" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in data.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local species = FishSpecies.getById(fish.species)
+    if not species or species.rarity ~= "legendary" then
+        return -- trophies are for legendaries only (PRD §4) — expected-failure path, not an error
+    end
+
+    table.remove(data.inventory, fishIndex)
+    table.insert(data.restaurant.trophies, { species = fish.species, mountedAt = os.time() })
+
+    trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
+end
+
+-- Rare-fish gifting (M16, PRD §4: "friend-boost and virality engine"). Restricted to rare+
+-- rarity, matching "Rare-fish gifting is in" verbatim. Transfers the raw fish only — the recipient
+-- still has to cook (Cooking-gated for a legendary, same as anyone) and serve it themselves, so
+-- there is no cheap liquidation path (PRD §4): a gift can't skip the skill-gated value-extraction
+-- chain any more than a self-caught fish can.
+local function _onGiftFish(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    local targetUserId = if typeof(payload) == "table" then payload.targetUserId else nil
+    if type(fishId) ~= "string" or type(targetUserId) ~= "number" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local senderData = dataService and dataService:get(player.UserId)
+    if not senderData then
+        return
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in senderData.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local species = FishSpecies.getById(fish.species)
+    if not species or (species.rarity ~= "rare" and species.rarity ~= "legendary") then
+        return -- only rare+ fish are giftable — expected-failure path, not an error
+    end
+
+    local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+    local targetData = targetPlayer and dataService:get(targetUserId)
+    if not targetData then
+        return -- target isn't online / isn't loaded — expected-failure path, not an error
+    end
+
+    local targetTierData = EconomyConfig.STORAGE_TIERS[targetData.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    if #targetData.inventory >= targetTierData.capacity then
+        return -- recipient's storage is full
+    end
+
+    table.remove(senderData.inventory, fishIndex)
+    table.insert(targetData.inventory, {
+        id = HttpService:GenerateGUID(false),
+        species = fish.species,
+        caughtAt = os.time(),
+        dryAgeMutation = fish.dryAgeMutation,
+    })
 end
 
 castLineRemote.OnServerEvent:Connect(_onCastLine)
 reelInputRemote.OnServerEvent:Connect(_onReelInput)
 cookTraceRemote.OnServerEvent:Connect(_onCookTrace)
 cookStrokeRemote.OnServerEvent:Connect(_onCookStroke)
+purchaseStorageTierRemote.OnServerEvent:Connect(_onPurchaseStorageTier)
+purchaseAgingLockerTierRemote.OnServerEvent:Connect(_onPurchaseAgingLockerTier)
+placeInAgingLockerRemote.OnServerEvent:Connect(_onPlaceInAgingLocker)
+pullFromLockerRemote.OnServerEvent:Connect(_onPullFromLocker)
+mountTrophyRemote.OnServerEvent:Connect(_onMountTrophy)
+giftFishRemote.OnServerEvent:Connect(_onGiftFish)
 servePlateRemote.OnServerEvent:Connect(_onServePlate)
 
 Players.PlayerRemoving:Connect(function(player: Player)

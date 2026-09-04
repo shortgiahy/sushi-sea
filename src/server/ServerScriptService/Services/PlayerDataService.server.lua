@@ -1,10 +1,65 @@
 -- PlayerDataService: DataStore reads/writes and offline bank snapshot/restore (PRD §7.3, §7.4)
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
+local OfflineBankCalculator = require(ServerStorage.Modules.OfflineBankCalculator)
+local PassManager = require(ServerStorage.Modules.PassManager)
+local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
+local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
+local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
+local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
+
+-- M6 addition: FreshnessUI's cash display needs an initial value on join, not just the delta
+-- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
+-- loaded player's starting cash is known.
+local cashUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Economy_CashUpdate
+
+-- M8 addition: same reasoning as cashUpdateRemote — a freshly loaded player's storage tier/
+-- capacity is only known here, right after load.
+local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Storage_TierUpdate
+
+-- M11 addition: same reasoning — a freshly loaded player's restaurant tier and staff roster are
+-- only known here, right after load.
+local restaurantTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TierUpdate
+local staffUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_StaffUpdate
+
+-- Rod-seller NPC addition (2026-09-04): same reasoning — a freshly loaded player's rod ownership/
+-- loadout is only known here, right after load.
+local rodUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Equipment_RodUpdate
+
+-- M15 addition: same reasoning — a freshly loaded player's aging locker tier/contents are only
+-- known here, right after load.
+local agingLockerUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Aging_LockerUpdate
+
+-- M16 addition: same reasoning — a freshly loaded player's mounted trophies are only known here,
+-- right after load.
+local trophyUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TrophyUpdate
+
+-- M19 addition: GamePass ownership + purchase prompt. Lives here (not a new service file) because
+-- PRD §7.1 names only the PassManager.lua module, not a dedicated service, and this is already
+-- where every other per-player join/leave push is wired.
+local ownershipUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Monetization_OwnershipUpdate
+local promptPassPurchaseRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Player_PromptPassPurchase
+
+local function _onPromptPassPurchase(player: Player, payload: any): ()
+    local passKey = if typeof(payload) == "table" then payload.passKey else nil
+    if type(passKey) ~= "string" then
+        return
+    end
+
+    local passEntry = MonetizationConfig.GAME_PASSES[passKey]
+    if not passEntry then
+        return -- unrecognized pass key — expected-failure path, not an error
+    end
+
+    PassManager.promptPurchase(player, passEntry.gamePassId)
+end
+
+promptPassPurchaseRemote.OnServerEvent:Connect(_onPromptPassPurchase)
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -43,13 +98,97 @@ end
 local service = PlayerDataService.new(dataStore)
 PlayerDataAccess.setInstance(service)
 
+-- M9 addition, M11 update: PRD §7.4's closed-form offline bank, run once right after load. Only
+-- fires when a prior save actually stamped a snapshot (offlineSnapshotAt > 0) — a brand-new player
+-- has nothing to reconcile. staffHeadcount now reads `#data.restaurant.staff` (M11's real roster),
+-- but throughput/plate-value/wage stay inert placeholders — those numbers still don't exist
+-- (docs/design/economy-model-skeleton.md), so a staffed player nets 0 here same as an unstaffed
+-- one until a later numbers session fills them in.
+local function _creditOfflineBank(data: any): ()
+    if data.economy.offlineSnapshotAt <= 0 then
+        return
+    end
+
+    local elapsedSeconds = math.max(os.time() - data.economy.offlineSnapshotAt, 0)
+    local netBank = OfflineBankCalculator.compute({
+        elapsedSeconds = elapsedSeconds,
+        staffHeadcount = #data.restaurant.staff,
+        throughputPerHourWhenStaffed = 0,
+        avgPlateValueAtLogout = 0,
+        remainingStockAfterSpoilage = 0,
+        wageRatePerHourPerStaff = 0,
+    })
+
+    data.economy.cash += netBank
+    data.economy.offlineSnapshotAt = os.time() -- PRD §7.4 step 7: clear the snapshot after crediting
+end
+
 Players.PlayerAdded:Connect(function(player: Player)
-    service:load(player.UserId, player.Name)
+    local data = service:load(player.UserId, player.Name)
+    _creditOfflineBank(data)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
+
+    local tierData = EconomyConfig.STORAGE_TIERS[data.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    local nextTierData = EconomyConfig.STORAGE_TIERS[data.storage.tier + 1]
+    storageTierUpdateRemote:FireClient(player, {
+        tier = data.storage.tier,
+        name = tierData.name,
+        capacity = tierData.capacity,
+        nextTierCost = if nextTierData then nextTierData.upgradeCost else nil,
+    })
+
+    local restaurantTierData = RestaurantConfig.RESTAURANT_TIERS[data.restaurant.tier]
+    local nextRestaurantTierData = RestaurantConfig.RESTAURANT_TIERS[data.restaurant.tier + 1]
+    restaurantTierUpdateRemote:FireClient(player, {
+        tier = data.restaurant.tier,
+        name = if restaurantTierData then restaurantTierData.name else nil,
+        seats = if restaurantTierData then restaurantTierData.seats else 0,
+        nextTierCost = if nextRestaurantTierData then nextRestaurantTierData.upgradeCost else nil,
+    })
+
+    local roster = {}
+    for _, staff in data.restaurant.staff do
+        table.insert(roster, { id = staff.id, rarity = staff.rarity, hiredAt = staff.hiredAt })
+    end
+    staffUpdateRemote:FireClient(player, { roster = roster })
+
+    local agingTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier]
+    local nextAgingTierData = AgingConfig.LOCKER_TIERS[data.agingLockerEquipment.tier + 1]
+    local locker = {}
+    for _, fish in data.agingLocker do
+        table.insert(locker, { slot = fish.slot, species = fish.species, placedAt = fish.placedAt })
+    end
+    agingLockerUpdateRemote:FireClient(player, {
+        tier = data.agingLockerEquipment.tier,
+        slots = if agingTierData then agingTierData.slots else 0,
+        nextTierCost = if nextAgingTierData then nextAgingTierData.upgradeCost else nil,
+        locker = locker,
+    })
+
+    trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
+
+    rodUpdateRemote:FireClient(player, {
+        ownedRodIds = data.equipment.ownedRodIds,
+        equippedRodId = data.equipment.equippedRodId,
+    })
+
+    local gamePassIds = {}
+    for _, passEntry in MonetizationConfig.GAME_PASSES do
+        table.insert(gamePassIds, passEntry.gamePassId)
+    end
+    PassManager.refreshForPlayer(player.UserId, gamePassIds)
+
+    local ownership = {}
+    for passKey, passEntry in MonetizationConfig.GAME_PASSES do
+        ownership[passKey] = PassManager.playerOwns(player.UserId, passEntry.gamePassId)
+    end
+    ownershipUpdateRemote:FireClient(player, { ownership = ownership })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)
     service:save(player.UserId, player.Name)
     service:release(player.UserId)
+    PassManager.releasePlayer(player.UserId)
 end)
 
 -- PlayerRemoving alone misses server shutdown — BindToClose is the only hook that fires then.

@@ -1,6 +1,6 @@
 # Sushi Sea — Claude Code Context
 
-Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Supply chain is the game.
+Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → cash. Supply chain is the game.
 
 - **Read order, every session:** `HANDOFF.md` → `ROADMAP.md` (current phase) → `TASKS.md` → tail of `BUILD_LOG.md`. Then search mem0 (`user_id: giahy`).
 - **Design source of truth:** `docs/PRD.md`. Locked Decisions are settled; Open Threads (§12) are never resolved unilaterally — surface to Giahy.
@@ -19,7 +19,7 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Su
 ## Hard invariants — stop and flag
 
 - Client never sees economy components; server resolves plate value (anti-spoof)
-- No wholesale market — a served plate is the only gold faucet
+- No wholesale market — a served plate is the only cash faucet
 - One `ConversionModule`; manual verb and staff AI are just drivers (§7.6)
 - Authored bands, clamped multipliers; no total-loss states; no shared legendary state; no crafting; no recurring debt
 
@@ -29,4 +29,4 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → gold. Su
 - Branches: `claude/sushi-<feature>` off `dev`. PRs target `dev`; merge needs green CI + `reviewer-code` + `reviewer-reality`. `dev`→`main` is Giahy-only.
 - Session end: update `TASKS.md`, append `BUILD_LOG.md`, save decisions to mem0, push everything. Unpushed work is lost.
 - Publishing to Roblox and Blender/Figma work are Giahy actions — hand over runbooks, never assume automation.
-- Studio MCP (Giahy's machine only, never cloud) is read/playtest-only: inspect, playtest, capture console + screenshots. Never author game code or assets through it — repo is source of truth, Rojo syncs one way, Studio-side writes die at the next sync. `docs/runbooks/roblox-studio-mcp.md`.
+- Studio MCP (Giahy's machine only, never cloud), rule revised 2026-09-04: **code vs. building, not "read-only vs. not."** Game logic is always repo-authored and Rojo-synced — never hand-written into the place, since it wouldn't even survive a Play/Stop cycle. World building (terrain, NPCs, props, materials, placement) is normal Studio-native work, and MCP's authoring tools are fair game for it, same as building by hand. `docs/runbooks/roblox-studio-mcp.md`.

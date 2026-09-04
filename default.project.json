@@ -40,6 +40,72 @@
           },
           "Economy_PlateResolved": {
             "$className": "RemoteEvent"
+          },
+          "Spoilage_InventoryUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Economy_CashUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PurchaseStorageTier": {
+            "$className": "RemoteEvent"
+          },
+          "Storage_TierUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PurchaseRestaurantTier": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_TierUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_HireStaff": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_StaffUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_CustomerUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Weather_StormBroadcast": {
+            "$className": "RemoteEvent"
+          },
+          "Fishing_LegendaryPhaseAdvanced": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PlaceInAgingLocker": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PullFromLocker": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PurchaseAgingLockerTier": {
+            "$className": "RemoteEvent"
+          },
+          "Aging_LockerUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_MountTrophy": {
+            "$className": "RemoteEvent"
+          },
+          "Player_GiftFish": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_TrophyUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PromptPassPurchase": {
+            "$className": "RemoteEvent"
+          },
+          "Monetization_OwnershipUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Player_PurchaseRod": {
+            "$className": "RemoteEvent"
+          },
+          "Equipment_RodUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

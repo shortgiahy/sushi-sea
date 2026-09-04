@@ -49,25 +49,27 @@ Read the indicator correctly: it counts *connected clients*. Enabling the toggle
 
 **Scope is `user`, never committed to `.mcp.json`.** `user` writes to `~/.claude.json` (`%USERPROFILE%\.claude.json`) — machine-wide, private, out of git. `local` also stays out of git but binds to one project directory, so Studio access vanishes the moment you work from anywhere else. Committing to `.mcp.json` is the wrong answer either way: the command is an OS-specific absolute path, so it breaks on the other machine and fails in every cloud session. `.mcp.json` stays empty (same reasoning that moved mem0 to the plugin).
 
-## Working rule — Studio MCP is an instrument, not an author
+## Working rule — code lives in the repo; building lives in Studio (revised 2026-09-04)
 
-PRD §10: **the repo is the source of truth; Studio is a view.** Rojo syncs one way, `src/` → Studio. Anything the MCP writes into the place is unversioned, unreviewed, invisible to CI, and destroyed at the next sync.
+**Split by kind, not by tool.** The line isn't "MCP vs. not MCP" — it's **game logic vs. world content**:
 
-| Use it for | Not for |
+- **Code (Luau scripts implementing game systems) is always repo-authored.** Edit `.luau` under `src/`, let Rojo sync it into Studio. Never hand-write or `execute_luau`/`multi_edit` a system's actual logic directly into the place — that's unversioned, unreviewed, invisible to CI, and (as of 2026-09-04, confirmed) doesn't even survive a Play/Stop cycle in Studio, so it was never a real authoring path for logic anyway.
+- **Building (terrain, NPCs, models, materials, decoration, physical placement) is Studio-native work, and that includes doing it through Studio MCP.** PRD §9's "Studio-only assets... documented in a Studio Setup.md runbook" already conceded terrain/placement don't round-trip through Rojo — the 2026-09-04 correction is that the fix isn't "script-generate it from the repo instead," it's "build it by hand in Studio, the way Roblox building normally works," using whatever tool is fastest, MCP included.
+
+| Use it for | Still not for |
 |---|---|
-| `script_read`, `script_search`, `script_grep` — read the live place | `multi_edit` — authoring game code. Edit `.luau` in the repo, let Rojo sync |
-| `search_game_tree`, `inspect_instance` — inspect the data model | `execute_luau` as a way to *ship* logic |
-| `start_stop_play`, `get_console_output`, `screen_capture` — playtest evidence | `generate_mesh`, `generate_material`, `generate_procedural_model` — M18 art is Blender + Giahy |
-| `character_navigation`, `user_keyboard_input`, `user_mouse_input` — drive a playtest | `insert_asset` / `search_asset` — Creator Store models are not the authored pipeline |
-| `execute_luau` for throwaway probes and one-shot diagnostics | Any economy/plate-value logic reaching the client (hard invariant) |
+| `script_read`, `script_search`, `script_grep`, `search_game_tree`, `inspect_instance` — read the live place | Writing a system's game logic directly into the place — that's still repo + Rojo, always |
+| `start_stop_play`, `get_console_output`, `screen_capture` — playtest evidence | Any economy/plate-value logic reaching the client (hard invariant, regardless of where it's authored) |
+| `execute_luau`, `multi_edit`, `insert_asset`, `search_asset`, `generate_mesh`, `generate_material`, `generate_procedural_model` — **building**: terrain, NPCs, props, materials, placement | |
+| `character_navigation`, `user_keyboard_input`, `user_mouse_input` — drive a playtest, or drive in-Studio building/placement | |
 | `http_get`, `skill` — API reference lookups | |
 
 Two payoffs worth having:
 
 - **`reviewer-reality` gets evidence.** Definition of Done demands proof a system is wired end-to-end. Console output and screen captures from a live playtest are exactly that — hand them to the reviewer instead of assertions.
-- **Studio-only state gets captured.** Terrain, lighting, and physical placement don't round-trip through Rojo. Inspect them via MCP, then write them into `Studio Setup.md` (PRD §10, M20) rather than leaving them as tribal knowledge in one `.rbxl`.
+- **World content built in Studio gets documented, not silently left as tribal knowledge.** Terrain, lighting, and physical placement still don't round-trip through Rojo — after building something, note what exists and how it was made in `Studio Setup.md` so it's not only ever known by opening the place.
 
-Anything the MCP surfaces that should persist gets written back into the repo as a file, by hand. The place file is never the record.
+Game logic surfaced or diagnosed via MCP still gets written back into the repo as a file, by hand — the place file is never the record for *code*. It's fine to be the record for *world content*, same as any other Roblox game's `.rbxl`.
 
 ## Troubleshooting
 

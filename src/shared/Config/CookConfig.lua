@@ -48,4 +48,9 @@ CookConfig.GRADE_BANDS = {
 CookConfig.MIN_COOK_ACTION_INTERVAL_SECONDS = 0.3
 CookConfig.PENDING_COOK_TIMEOUT_SECONDS = 30
 
+-- M16: "Cooking-gated legendary butchering" (PRD §4/§6) — below this level, a legendary-rarity
+-- catch can only be mounted as a trophy (Player_MountTrophy), not cooked; first-pass placeholder,
+-- same "starting guess, not locked" status as every other number in this file.
+CookConfig.MIN_COOKING_LEVEL_FOR_LEGENDARY_BUTCHER = 5
+
 return CookConfig

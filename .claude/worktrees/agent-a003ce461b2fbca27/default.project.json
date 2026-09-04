@@ -1,0 +1,32 @@
+{
+  "name": "sushi-sea",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$path": "src/server/ServerScriptService"
+    },
+    "ServerStorage": {
+      "$path": "src/server/ServerStorage"
+    },
+    "ReplicatedStorage": {
+      "$path": "src/shared",
+      "Events": {
+        "$className": "Folder",
+        "RemoteEvents": {
+          "$className": "Folder"
+        },
+        "RemoteFunctions": {
+          "$className": "Folder"
+        }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/client"
+      }
+    },
+    "StarterGui": {
+      "$path": "src/gui"
+    }
+  }
+}

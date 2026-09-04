@@ -27,6 +27,12 @@ type ControllerState = {
     isHolding: boolean,
     lastSentAt: number,
     biteAt: number?,
+    -- M14: a legendary encounter's catch box is narrower per phase than FishingConfig's shared
+    -- constant — the server tells the client the effective width/duration per bite/phase-advance
+    -- instead of the client assuming the shared default. A normal fight just gets the defaults
+    -- echoed back, so this path is unconditional, not legendary-only branching.
+    activeCatchBoxWidth: number,
+    activeFightDurationSeconds: number,
 }
 
 local state: ControllerState = {
@@ -37,6 +43,8 @@ local state: ControllerState = {
     isHolding = false,
     lastSentAt = 0,
     biteAt = nil,
+    activeCatchBoxWidth = FishingConfig.CATCH_BOX_WIDTH,
+    activeFightDurationSeconds = FishingConfig.FIGHT_DURATION_SECONDS,
 }
 
 local bobber: BasePart? = nil
@@ -63,7 +71,7 @@ local function _fishPositionAt(elapsedSeconds: number): number
         + FishingConfig.FISH_MOTION_AMPLITUDE_2
             * math.sin(elapsedSeconds * FishingConfig.FISH_MOTION_FREQUENCY_2 + FishingConfig.FISH_MOTION_PHASE_2)
 
-    local halfWidth = FishingConfig.CATCH_BOX_WIDTH / 2
+    local halfWidth = state.activeCatchBoxWidth / 2
     return math.clamp(raw, halfWidth, 1 - halfWidth)
 end
 
@@ -259,7 +267,12 @@ local function _beginCast(screenPosition: Vector3, castLineRemote: RemoteEvent):
     castLineRemote:FireServer({ location = target })
 end
 
-local function _onBiteWindow(fightId: string): ()
+local function _onBiteWindow(
+    fightId: string,
+    catchBoxWidth: number?,
+    fightDurationSeconds: number?,
+    isLegendary: boolean?
+): ()
     if state.phase ~= "waiting_for_bite" then
         return
     end
@@ -269,16 +282,46 @@ local function _onBiteWindow(fightId: string): ()
     state.tension = 0
     state.progress = 0
     state.biteAt = os.clock()
-    _setPrompt("Reel now!")
+    state.activeCatchBoxWidth = catchBoxWidth or FishingConfig.CATCH_BOX_WIDTH
+    state.activeFightDurationSeconds = fightDurationSeconds or FishingConfig.FIGHT_DURATION_SECONDS
+    _setPrompt(if isLegendary then "LEGENDARY — Reel now!" else "Reel now!")
     _setMetersVisible(true)
+    if catchBox then
+        catchBox.Size = UDim2.fromScale(state.activeCatchBoxWidth, 1)
+    end
 
     local bobberPart = _getOrCreateBobber()
+    bobberPart.Color = if isLegendary then Color3.fromRGB(160, 60, 220) else bobberPart.Color
     local flash = TweenService:Create(
         bobberPart,
         TweenInfo.new(0.12, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 3, true),
         { Size = Vector3.new(1.0, 1.0, 1.0) }
     )
     flash:Play()
+end
+
+-- M14: a legendary encounter's phase succeeded and the fight continues, harder — same fightId,
+-- no new "bite" pause. Resets the local tension/progress bars and re-bases the fish-motion clock
+-- so `_fishPositionAt`'s elapsed-time-since-bite reads correctly for the new phase.
+local function _onLegendaryPhaseAdvanced(
+    fightId: string,
+    phaseIndex: number,
+    catchBoxWidth: number,
+    fightDurationSeconds: number
+): ()
+    if fightId ~= state.activeFightId then
+        return
+    end
+
+    state.tension = 0
+    state.progress = 0
+    state.biteAt = os.clock()
+    state.activeCatchBoxWidth = catchBoxWidth
+    state.activeFightDurationSeconds = fightDurationSeconds
+    _setPrompt(("LEGENDARY — Phase %d!"):format(phaseIndex))
+    if catchBox then
+        catchBox.Size = UDim2.fromScale(state.activeCatchBoxWidth, 1)
+    end
 end
 
 local function _resetToIdle(): ()
@@ -288,6 +331,8 @@ local function _resetToIdle(): ()
     state.progress = 0
     state.isHolding = false
     state.biteAt = nil
+    state.activeCatchBoxWidth = FishingConfig.CATCH_BOX_WIDTH
+    state.activeFightDurationSeconds = FishingConfig.FIGHT_DURATION_SECONDS
     _setMetersVisible(false)
     _destroyBobber()
 end
@@ -333,7 +378,7 @@ local function _onHeartbeat(dt: number, reelInputRemote: RemoteEvent): ()
 
     local now = os.clock()
     local fishPosition = _fishPositionAt(if state.biteAt then now - state.biteAt else 0)
-    local halfWidth = FishingConfig.CATCH_BOX_WIDTH / 2
+    local halfWidth = state.activeCatchBoxWidth / 2
     local inBand = fishPosition >= state.tension - halfWidth and fishPosition <= state.tension + halfWidth
 
     if fishSprite then
@@ -386,11 +431,13 @@ function FishingController.init(): ()
     local reelInputRemote = remoteEvents:WaitForChild("Player_ReelInput") :: RemoteEvent
     local biteWindowRemote = remoteEvents:WaitForChild("Fishing_BiteWindow") :: RemoteEvent
     local fightResultRemote = remoteEvents:WaitForChild("Fishing_FightResult") :: RemoteEvent
+    local legendaryPhaseAdvancedRemote = remoteEvents:WaitForChild("Fishing_LegendaryPhaseAdvanced") :: RemoteEvent
 
     _buildGui()
 
     biteWindowRemote.OnClientEvent:Connect(_onBiteWindow)
     fightResultRemote.OnClientEvent:Connect(_onFightResult)
+    legendaryPhaseAdvancedRemote.OnClientEvent:Connect(_onLegendaryPhaseAdvanced)
 
     UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
         if gameProcessed then
