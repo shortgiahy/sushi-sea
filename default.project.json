@@ -100,6 +100,12 @@
           },
           "Monetization_OwnershipUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Player_PurchaseRod": {
+            "$className": "RemoteEvent"
+          },
+          "Equipment_RodUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

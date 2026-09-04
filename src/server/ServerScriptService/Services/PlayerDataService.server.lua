@@ -27,6 +27,10 @@ local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEven
 local restaurantTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TierUpdate
 local staffUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_StaffUpdate
 
+-- Rod-seller NPC addition (2026-09-04): same reasoning — a freshly loaded player's rod ownership/
+-- loadout is only known here, right after load.
+local rodUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Equipment_RodUpdate
+
 -- M15 addition: same reasoning — a freshly loaded player's aging locker tier/contents are only
 -- known here, right after load.
 local agingLockerUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Aging_LockerUpdate
@@ -162,6 +166,11 @@ Players.PlayerAdded:Connect(function(player: Player)
     })
 
     trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
+
+    rodUpdateRemote:FireClient(player, {
+        ownedRodIds = data.equipment.ownedRodIds,
+        equippedRodId = data.equipment.equippedRodId,
+    })
 
     local gamePassIds = {}
     for _, passEntry in MonetizationConfig.GAME_PASSES do

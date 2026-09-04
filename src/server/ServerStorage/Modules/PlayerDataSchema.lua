@@ -1,8 +1,13 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 6
+local SCHEMA_VERSION = 7
 local TUTORIAL_LOAN_DEFAULT = 500
+
+-- Hardcoded here rather than requiring RodConfig (ReplicatedStorage.Config) — this module is
+-- deliberately pure/no-Roblox-services (see header), same reasoning TUTORIAL_LOAN_DEFAULT above
+-- is a bare number instead of pulling EconomyConfig in.
+local DEFAULT_ROD_ID = "starter_rod"
 
 export type SkillEntry = { level: number, xp: number }
 
@@ -61,6 +66,14 @@ export type AgingLockerEquipment = {
     tier: number,
 }
 
+-- Fishing rod ownership/loadout (rod-seller NPC, 2026-09-04). `ownedRodIds` is a set (presence,
+-- not count — a rod is a one-time durable purchase, never consumed or stacked, same shape
+-- `restaurant.trophies`-style arrays weren't right for: there's nothing per-copy to store).
+export type Equipment = {
+    ownedRodIds: { [string]: boolean },
+    equippedRodId: string,
+}
+
 export type Economy = {
     cash: number,
     offlineSnapshotAt: number,
@@ -83,6 +96,7 @@ export type PlayerData = {
     restaurant: Restaurant,
     storage: Storage,
     economy: Economy,
+    equipment: Equipment,
     meta: Meta,
 }
 
@@ -121,6 +135,10 @@ function PlayerDataSchema.newDefault(): PlayerData
             offlineSnapshotAt = 0,
             offlineStockCount = 0,
             tutorialLoanOwed = TUTORIAL_LOAN_DEFAULT,
+        },
+        equipment = {
+            ownedRodIds = { [DEFAULT_ROD_ID] = true },
+            equippedRodId = DEFAULT_ROD_ID,
         },
         meta = {
             schemaVersion = SCHEMA_VERSION,
@@ -262,6 +280,24 @@ MIGRATIONS[5] = function(old: any): PlayerData
         else 0
     old.economy.gold = nil
     old.meta.schemaVersion = 6
+    return old
+end
+
+-- v6 -> v7 (rod-seller NPC, 2026-09-04): adds `equipment` (see its type comment above) — a pure
+-- addition, same shape as v2 -> v3's `storage` arrival. Every existing player starts owning and
+-- wearing the free starter rod, same as if they were new — there is nothing to preserve from a
+-- version that had no concept of rods at all.
+MIGRATIONS[6] = function(old: any): PlayerData
+    local oldEquipment = if type(old.equipment) == "table" then old.equipment else {}
+    local oldOwnedRodIds = if type(oldEquipment.ownedRodIds) == "table" then oldEquipment.ownedRodIds else {}
+    oldOwnedRodIds[DEFAULT_ROD_ID] = true
+    old.equipment = {
+        ownedRodIds = oldOwnedRodIds,
+        equippedRodId = if type(oldEquipment.equippedRodId) == "string"
+            then oldEquipment.equippedRodId
+            else DEFAULT_ROD_ID,
+    }
+    old.meta.schemaVersion = 7
     return old
 end
 
