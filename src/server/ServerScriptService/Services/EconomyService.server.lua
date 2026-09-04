@@ -64,6 +64,9 @@ local placeInAgingLockerRemote: RemoteEvent = RemoteEvents.Player_PlaceInAgingLo
 local pullFromLockerRemote: RemoteEvent = RemoteEvents.Player_PullFromLocker
 local purchaseAgingLockerTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseAgingLockerTier
 local agingLockerUpdateRemote: RemoteEvent = RemoteEvents.Aging_LockerUpdate
+local mountTrophyRemote: RemoteEvent = RemoteEvents.Player_MountTrophy
+local giftFishRemote: RemoteEvent = RemoteEvents.Player_GiftFish
+local trophyUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_TrophyUpdate
 
 local LEGENDARY_TUNING: LegendaryFight.LegendaryTuning = {
     PHASE_COUNT = WeatherConfig.LEGENDARY_PHASE_COUNT,
@@ -550,6 +553,12 @@ local function _onCookTrace(player: Player, payload: any): ()
     if not species then
         return
     end
+    if
+        species.rarity == "legendary"
+        and data.skills.cooking.level < CookConfig.MIN_COOKING_LEVEL_FOR_LEGENDARY_BUTCHER
+    then
+        return -- not Cooking-gated open yet (M16, PRD §4) — mount it instead, or wait to level up
+    end
 
     if species.prepTier == "quick" or species.loinCount <= 0 then
         _resolveCook(player, data, fish, traceAccuracy, {})
@@ -845,6 +854,98 @@ local function _onPullFromLocker(player: Player, payload: any): ()
     _pushAgingLockerUpdate(player, data)
 end
 
+-- Trophy mount (M16, PRD §4: "pure public flex, decay-free, and goal-markers for catches you
+-- can't yet butcher"). Restricted to legendary rarity — the design explicitly frames mounts as the
+-- alternative to butchering a legendary you're not Cooking-level-gated to process yet, not a
+-- general-purpose display case for any catch.
+local function _onMountTrophy(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    if type(fishId) ~= "string" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local data = dataService and dataService:get(player.UserId)
+    if not data then
+        return
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in data.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local species = FishSpecies.getById(fish.species)
+    if not species or species.rarity ~= "legendary" then
+        return -- trophies are for legendaries only (PRD §4) — expected-failure path, not an error
+    end
+
+    table.remove(data.inventory, fishIndex)
+    table.insert(data.restaurant.trophies, { species = fish.species, mountedAt = os.time() })
+
+    trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
+end
+
+-- Rare-fish gifting (M16, PRD §4: "friend-boost and virality engine"). Restricted to rare+
+-- rarity, matching "Rare-fish gifting is in" verbatim. Transfers the raw fish only — the recipient
+-- still has to cook (Cooking-gated for a legendary, same as anyone) and serve it themselves, so
+-- there is no cheap liquidation path (PRD §4): a gift can't skip the skill-gated value-extraction
+-- chain any more than a self-caught fish can.
+local function _onGiftFish(player: Player, payload: any): ()
+    local fishId = if typeof(payload) == "table" then payload.fishId else nil
+    local targetUserId = if typeof(payload) == "table" then payload.targetUserId else nil
+    if type(fishId) ~= "string" or type(targetUserId) ~= "number" then
+        return
+    end
+
+    local dataService = PlayerDataAccess.getInstance()
+    local senderData = dataService and dataService:get(player.UserId)
+    if not senderData then
+        return
+    end
+
+    local fishIndex, fish = nil, nil
+    for i, entry in senderData.inventory do
+        if entry.id == fishId then
+            fishIndex, fish = i, entry
+            break
+        end
+    end
+    if not fish then
+        return
+    end
+
+    local species = FishSpecies.getById(fish.species)
+    if not species or (species.rarity ~= "rare" and species.rarity ~= "legendary") then
+        return -- only rare+ fish are giftable — expected-failure path, not an error
+    end
+
+    local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+    local targetData = targetPlayer and dataService:get(targetUserId)
+    if not targetData then
+        return -- target isn't online / isn't loaded — expected-failure path, not an error
+    end
+
+    local targetTierData = EconomyConfig.STORAGE_TIERS[targetData.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
+    if #targetData.inventory >= targetTierData.capacity then
+        return -- recipient's storage is full
+    end
+
+    table.remove(senderData.inventory, fishIndex)
+    table.insert(targetData.inventory, {
+        id = HttpService:GenerateGUID(false),
+        species = fish.species,
+        caughtAt = os.time(),
+        dryAgeMutation = fish.dryAgeMutation,
+    })
+end
+
 castLineRemote.OnServerEvent:Connect(_onCastLine)
 reelInputRemote.OnServerEvent:Connect(_onReelInput)
 cookTraceRemote.OnServerEvent:Connect(_onCookTrace)
@@ -853,6 +954,8 @@ purchaseStorageTierRemote.OnServerEvent:Connect(_onPurchaseStorageTier)
 purchaseAgingLockerTierRemote.OnServerEvent:Connect(_onPurchaseAgingLockerTier)
 placeInAgingLockerRemote.OnServerEvent:Connect(_onPlaceInAgingLocker)
 pullFromLockerRemote.OnServerEvent:Connect(_onPullFromLocker)
+mountTrophyRemote.OnServerEvent:Connect(_onMountTrophy)
+giftFishRemote.OnServerEvent:Connect(_onGiftFish)
 servePlateRemote.OnServerEvent:Connect(_onServePlate)
 
 Players.PlayerRemoving:Connect(function(player: Player)

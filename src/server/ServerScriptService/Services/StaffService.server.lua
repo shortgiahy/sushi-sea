@@ -115,6 +115,15 @@ local function _autoCook(data: any, staffMember: any, now: number): ()
         table.insert(data.inventory, 1, fish) -- content gap (unknown species) — put it back, don't destroy it
         return
     end
+    -- M16: same Cooking-gate as the player's manual verb (EconomyService._onCookTrace) — staff
+    -- can't butcher a legendary the player's own account isn't leveled to process yet either.
+    if
+        species.rarity == "legendary"
+        and data.skills.cooking.level < CookConfig.MIN_COOKING_LEVEL_FOR_LEGENDARY_BUTCHER
+    then
+        table.insert(data.inventory, 1, fish)
+        return
+    end
 
     local rarityTuning = RestaurantConfig.STAFF_RARITY[staffMember.rarity]
     local performanceScore =

@@ -85,6 +85,15 @@
           },
           "Aging_LockerUpdate": {
             "$className": "RemoteEvent"
+          },
+          "Player_MountTrophy": {
+            "$className": "RemoteEvent"
+          },
+          "Player_GiftFish": {
+            "$className": "RemoteEvent"
+          },
+          "Restaurant_TrophyUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {

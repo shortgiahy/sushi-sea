@@ -29,6 +29,10 @@ local staffUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Res
 -- known here, right after load.
 local agingLockerUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Aging_LockerUpdate
 
+-- M16 addition: same reasoning — a freshly loaded player's mounted trophies are only known here,
+-- right after load.
+local trophyUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Restaurant_TrophyUpdate
+
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
 -- repo locally (no published Roblox experience exists yet). Falling back to an in-memory mock
@@ -132,6 +136,8 @@ Players.PlayerAdded:Connect(function(player: Player)
         nextTierCost = if nextAgingTierData then nextAgingTierData.upgradeCost else nil,
         locker = locker,
     })
+
+    trophyUpdateRemote:FireClient(player, { trophies = data.restaurant.trophies })
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)

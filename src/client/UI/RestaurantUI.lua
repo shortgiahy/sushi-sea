@@ -9,6 +9,10 @@
 -- M12 addition: a star-rating line (TrafficStat.starsFor, server-resolved and pushed alongside the
 -- customer snapshot) stands in for the full "Yelp app" — that's a bigger UI surface than this
 -- gray-box panel needs yet; the number itself is the part M12's task table actually calls for.
+--
+-- M16 addition: a read-only trophy count (Restaurant_TrophyUpdate) — mounting itself happens via
+-- Player_MountTrophy with no dedicated UI yet, same "mechanic complete, interaction UI later"
+-- precedent M15's aging locker set.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -24,6 +28,7 @@ local upgradeTierButton: TextButton? = nil
 local staffLabel: TextLabel? = nil
 local hireButtons: { [string]: TextButton } = {}
 local customerContainer: Frame? = nil
+local trophyLabel: TextLabel? = nil
 
 local purchaseRestaurantTierRemote: RemoteEvent? = nil
 local hireStaffRemote: RemoteEvent? = nil
@@ -31,6 +36,7 @@ local hireStaffRemote: RemoteEvent? = nil
 local restaurantTierState = { tier = 0, name = nil :: string?, seats = 0, nextTierCost = 2000 :: number? }
 local staffCount = 0
 local currentStars = 1
+local trophyCount = 0
 
 local function _clearContainer(container: Frame): ()
     for _, child in container:GetChildren() do
@@ -66,7 +72,7 @@ local function _buildGui(): ()
     root.Name = "Root"
     root.AnchorPoint = Vector2.new(1, 0)
     root.Position = UDim2.new(1, -16, 0, 16)
-    root.Size = UDim2.fromOffset(240, 340)
+    root.Size = UDim2.fromOffset(240, 362)
     root.BackgroundTransparency = 1
     root.Parent = screenGui
 
@@ -159,6 +165,18 @@ local function _buildGui(): ()
     customersLayout.SortOrder = Enum.SortOrder.LayoutOrder
     customersLayout.Parent = customers
 
+    local trophy = Instance.new("TextLabel")
+    trophy.Name = "Trophies"
+    trophy.Position = UDim2.fromOffset(0, hireButtonsTop + #RARITY_ORDER * 30 + 24 + 120 + 4)
+    trophy.Size = UDim2.new(1, 0, 0, 18)
+    trophy.BackgroundTransparency = 1
+    trophy.TextColor3 = Color3.fromRGB(220, 200, 150)
+    trophy.TextXAlignment = Enum.TextXAlignment.Left
+    trophy.Font = Enum.Font.SourceSans
+    trophy.TextSize = 15
+    trophy.Text = "Trophies: 0"
+    trophy.Parent = root
+
     screenGui.Parent = playerGui
 
     tierLabel = tier
@@ -166,6 +184,7 @@ local function _buildGui(): ()
     upgradeTierButton = upgradeTier
     staffLabel = staff
     customerContainer = customers
+    trophyLabel = trophy
 end
 
 local function _refreshTierDisplay(): ()
@@ -232,6 +251,13 @@ local function _onCustomerUpdate(payload: CustomerUpdate): ()
     end
 end
 
+local function _onTrophyUpdate(payload: { trophies: { any } }): ()
+    trophyCount = #payload.trophies
+    if trophyLabel then
+        trophyLabel.Text = ("Trophies: %d"):format(trophyCount)
+    end
+end
+
 local function _onUpgradeTierButtonPressed(): ()
     if purchaseRestaurantTierRemote then
         purchaseRestaurantTierRemote:FireServer()
@@ -243,6 +269,7 @@ function RestaurantUI.init(): ()
     local tierUpdateRemote = remoteEvents:WaitForChild("Restaurant_TierUpdate") :: RemoteEvent
     local staffUpdateRemote = remoteEvents:WaitForChild("Restaurant_StaffUpdate") :: RemoteEvent
     local customerUpdateRemote = remoteEvents:WaitForChild("Restaurant_CustomerUpdate") :: RemoteEvent
+    local trophyUpdateRemote = remoteEvents:WaitForChild("Restaurant_TrophyUpdate") :: RemoteEvent
     purchaseRestaurantTierRemote = remoteEvents:WaitForChild("Player_PurchaseRestaurantTier") :: RemoteEvent
     hireStaffRemote = remoteEvents:WaitForChild("Player_HireStaff") :: RemoteEvent
 
@@ -254,6 +281,7 @@ function RestaurantUI.init(): ()
     tierUpdateRemote.OnClientEvent:Connect(_onTierUpdate)
     staffUpdateRemote.OnClientEvent:Connect(_onStaffUpdate)
     customerUpdateRemote.OnClientEvent:Connect(_onCustomerUpdate)
+    trophyUpdateRemote.OnClientEvent:Connect(_onTrophyUpdate)
 
     if upgradeTierButton then
         upgradeTierButton.Activated:Connect(_onUpgradeTierButtonPressed)
