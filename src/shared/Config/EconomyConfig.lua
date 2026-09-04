@@ -29,4 +29,21 @@ EconomyConfig.DRY_AGE_MUTATION_BASELINE = 1.0
 
 EconomyConfig.MIN_SERVE_ACTION_INTERVAL_SECONDS = 0.3
 
+-- M6 scope reasoning:
+-- - RAW_FISH_*_AFTER_SECONDS and COOKED_PORTION_*_AFTER_SECONDS are SpoilageCalculator's
+--   two-threshold tuning (PRD §4's "basic freshness tick") — same "starting guess, not locked"
+--   status as every other placeholder constant in this file. Cooked-portion thresholds are set
+--   relative to FRESHNESS_DECAY_WINDOW_SECONDS (the point freshness_polish already bottoms out at
+--   CLAMP_FRESHNESS_MIN) so a portion keeps *some* value for its whole "stale" phase and is only
+--   tossed once it would already be resolving at the floor multiplier anyway.
+-- - SPOILAGE_TICK_INTERVAL_SECONDS is how often SpoilageService.server.lua sweeps loaded players'
+--   inventory/cookedPortions — a period, not a per-frame value, so it lives beside the other
+--   service-level timing knob here (MIN_SERVE_ACTION_INTERVAL_SECONDS) rather than in a new file.
+EconomyConfig.RAW_FISH_STALE_AFTER_SECONDS = 300
+EconomyConfig.RAW_FISH_SPOILED_AFTER_SECONDS = 600
+EconomyConfig.COOKED_PORTION_STALE_AFTER_SECONDS = EconomyConfig.FRESHNESS_DECAY_WINDOW_SECONDS
+EconomyConfig.COOKED_PORTION_SPOILED_AFTER_SECONDS = EconomyConfig.FRESHNESS_DECAY_WINDOW_SECONDS * 2
+
+EconomyConfig.SPOILAGE_TICK_INTERVAL_SECONDS = 5
+
 return EconomyConfig

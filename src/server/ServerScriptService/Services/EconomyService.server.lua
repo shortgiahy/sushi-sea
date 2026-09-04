@@ -43,6 +43,7 @@ local cookStrokeRemote: RemoteEvent = RemoteEvents.Player_CookStroke
 local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolved
 local servePlateRemote: RemoteEvent = RemoteEvents.Player_ServePlate
 local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
+local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
 
 -- PRD §5's cooking_extraction reuses CookConfig's existing "cooking level ceiling" constant
 -- (see EconomyConfig.lua's header for why this isn't duplicated there) rather than defining a
@@ -515,6 +516,7 @@ local function _onServePlate(player: Player, payload: any): ()
     data.economy.gold += plateValue
 
     plateResolvedRemote:FireClient(player, plateValue, breakdown)
+    goldUpdateRemote:FireClient(player, data.economy.gold)
 end
 
 castLineRemote.OnServerEvent:Connect(_onCastLine)

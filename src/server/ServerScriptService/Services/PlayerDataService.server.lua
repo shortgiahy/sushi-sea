@@ -1,10 +1,16 @@
 -- PlayerDataService: DataStore reads/writes and offline bank snapshot/restore (PRD §7.3, §7.4)
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local PlayerDataService = require(ServerStorage.Modules.PlayerDataService)
 local PlayerDataAccess = require(ServerStorage.Modules.PlayerDataAccess)
+
+-- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
+-- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
+-- loaded player's starting gold is known.
+local goldUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Economy_GoldUpdate
 
 -- DataStoreService:GetDataStore throws outright — not just a failed Get/SetAsync — on an
 -- unpublished place with Studio API access off, which is the normal state while iterating on this
@@ -44,7 +50,8 @@ local service = PlayerDataService.new(dataStore)
 PlayerDataAccess.setInstance(service)
 
 Players.PlayerAdded:Connect(function(player: Player)
-    service:load(player.UserId, player.Name)
+    local data = service:load(player.UserId, player.Name)
+    goldUpdateRemote:FireClient(player, data.economy.gold)
 end)
 
 Players.PlayerRemoving:Connect(function(player: Player)

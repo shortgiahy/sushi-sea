@@ -2,7 +2,7 @@
 
 Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` · `blocked` · `done` (done = full Definition of Done, PRD §11 — not "file exists"). Update every session.
 
-## Wave 1 (current)
+## Wave 1 — CLOSED
 
 | Task | Agent | Status | Branch/PR |
 |---|---|---|---|
@@ -11,7 +11,9 @@ Live status of PRD §6 modules. Statuses: `todo` · `in-progress` · `review` ·
 | M0 prep: cook-verb analysis doc | dev-experience | done (merged to `main`) | `claude/sushi-m0-verb-brief` |
 | Economy table skeleton (Thread #3 prep, doc only) | dev-experience | done (merged to `main`) | `claude/sushi-econ-skeleton` |
 
-Wave 1 is complete. CI-green-on-Actions was not independently reconfirmed after merge — flagging, not blocking.
+## Current (2026-09-04 reconciliation)
+
+M3, M4, and M5 branches merged to `main` (PRs #12/#13/#14) — TASKS.md hadn't been updated since. M6 (basic spoilage + slice UI) is in progress now on `claude/sushi-m6-spoilage`, proceeding without M5's Studio playtest pass per Giahy's call (2026-09-04) — that verification is still outstanding, tracked below rather than blocking.
 
 ## Modules
 
@@ -20,10 +22,10 @@ Wave 1 is complete. CI-green-on-Actions was not independently reconfirmed after 
 | M0 ⚡ | Cook & serve verb lock (design) | Giahy grill-me | done — locked 2026-07-29 (Giahy): two-stage cook (trace→yield, stroke→grade), serve = pure delivery. Spec `docs/design/cook-verb.md`; PRD §4/§5/§6/§7.6/§12 updated 2026-07-29 |
 | M1 | Repo + toolchain skeleton | — | done |
 | M2 | Player data backbone | M1 | done — Studio join/load/save not yet manually verified (headless-only so far) |
-| M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | in-progress — `claude/sushi-m4-cook` (fishing files touched here too, see note). Reel minigame reworked 2026-08-06 (Giahy, two passes same day): real Stardew Valley roles — a fish sprite drifts on its own (`FishingCatch.fishPositionAt`, deterministic sine-sum), the player moves a fixed-width catch box via hold/release (unchanged control scheme) to keep the fish inside it. Also fixed the progress bar, dead since M3 (never wired to a value) — now mirrors the server's gain/decay formula client-side. Studio-unverified since this rework; needs another playtest pass before the feel gate. |
-| M4 ⚡ | Conversion core + cook verb | M0, M3 | review — `claude/sushi-m4-cook`. `ConversionModule.cook` (yield + grade per the 2026-07-29 cook-verb lock) implemented and headless-tested; `BoatCookController` drives it gray-box on the boat; caught fish now write into `PlayerDataService` inventory (deferred from M3). `rojo build`/selene/stylua clean. **Studio-verified 2026-08-06 (Giahy): cast→catch→cook interaction works end-to-end.** NOT `done`: mechanics/feel confirmed not right — the real slicing interaction (drag/angle/speed-consistency, cook-verb.md §2) is **blocked on fish/board geometry that doesn't exist yet** (M18 art pass); current gray-box stand-in exercises the real contract but isn't the intended feel. See BUILD_LOG.md 2026-08-06 entries. |
-| M5 ⚡ | Serve verb + economy faucet | M4 | review — `claude/sushi-m5-economy`. `PlateValueResolver.lua` implements the full formula (`cut_base × cooking_extraction × freshness_polish × dry_age_mutation`, headless-tested); `FishTable.lua` authors graded `cut_base[species][grade]` for the 5 existing gray-box species (not yet PRD's ~10-species target — flagged as a follow-up content pass, not fabricated here). Boat serve verb wired into `BoatCookController.lua` (Serve button/F key drains cooked portions one at a time via `Player_ServePlate`); gold awarded server-side in `EconomyService.server.lua`, `Economy_PlateResolved` returns value+breakdown for receipt display. `rojo build`/selene/stylua clean, all headless tests green. NOT `done`: Studio-unverified (no playtest pass yet), and `freshness_polish`'s decay curve is a placeholder standing in for M6's real `SpoilageService` tick. |
-| M6 ⚡ | Basic spoilage + slice UI | M5 | todo |
+| M3 ⚡ | Fishing feel slice (gray-box) | M0, M2 | done (merged to `main`, PR #13) — real Stardew Valley roles: a fish sprite drifts on its own (`FishingCatch.fishPositionAt`, deterministic sine-sum), the player moves a fixed-width catch box via hold/release to keep the fish inside it; progress bar wired to the server's gain/decay formula. **Studio-unverified since the 2026-08-06 rework** — no playtest pass has confirmed the corrected roles feel right; feel gate still open. |
+| M4 ⚡ | Conversion core + cook verb | M0, M3 | done (merged to `main`, PR #13). `ConversionModule.cook` (yield + grade per the 2026-07-29 cook-verb lock) implemented and headless-tested; `BoatCookController` drives it gray-box on the boat; caught fish write into `PlayerDataService` inventory. `rojo build`/selene/stylua clean. **Studio-verified 2026-08-06 (Giahy): cast→catch→cook interaction works end-to-end.** Known gap: the real slicing interaction (drag/angle/speed-consistency, cook-verb.md §2) is **blocked on fish/board geometry that doesn't exist yet** (M18 art pass); current gray-box stand-in exercises the real contract but isn't the intended feel. See BUILD_LOG.md 2026-08-06 entries. |
+| M5 ⚡ | Serve verb + economy faucet | M4 | done (merged to `main`, PR #14). `PlateValueResolver.lua` implements the full formula (`cut_base × cooking_extraction × freshness_polish × dry_age_mutation`, headless-tested); `FishTable.lua` authors graded `cut_base[species][grade]` for the 5 existing gray-box species (not yet PRD's ~10-species target — flagged as a follow-up content pass). Boat serve verb wired into `BoatCookController.lua`; gold awarded server-side in `EconomyService.server.lua`. `rojo build`/selene/stylua clean, all headless tests green. **Studio-unverified** — no playtest pass yet on the serve button, gold award, or the freshness-decay curve's feel. |
+| M6 ⚡ | Basic spoilage + slice UI | M5 | review — `claude/sushi-m6-spoilage`. New pure `SpoilageCalculator.lua` (fresh/stale/spoiled classification, headless-tested) drives `SpoilageService.server.lua`'s periodic sweep (every `EconomyConfig.SPOILAGE_TICK_INTERVAL_SECONDS`) over raw `inventory` and `cookedPortions`; spoiled entries are removed (tossed) before the survivor snapshot is pushed to the client via the new `Spoilage_InventoryUpdate` remote. `FreshnessUI.lua` renders that snapshot plus a running gold total (new `Economy_GoldUpdate` remote, fired on join and after each serve) — client never computes freshness locally, matching the file's original header contract. `rojo build`/selene/stylua clean, all headless tests green (`tests/SpoilageCalculator.spec.luau`, new). NOT `done`: Studio-unverified (no playtest pass on the tick or the UI panel); raw-fish/cooked-portion spoilage thresholds are unvalidated placeholders same status as every other M3–M5 tuning constant; the full otoro→chutoro→akami grade-downgrade chain (PRD §4) is explicitly deferred to M8's real decay model, not built here. |
 | M7 | Economy tuning model (numbers, with Giahy) | M6 | todo |
 | M8 | Spoilage + storage tiers | M7 | todo |
 | M9 | Offline bank | M8 | todo |
@@ -47,6 +49,7 @@ Wave 1 is complete. CI-green-on-Actions was not independently reconfirmed after 
 | ~~Apply the M0 PRD edits~~ — done 2026-07-29, directly in `docs/PRD.md` | ~~M4/M5/M17 acceptance criteria~~ |
 | ~~Cloud environment: `MEM0_API_KEY` var + `mcp.mem0.ai` on a Custom network allowlist + mem0 plugin installed~~ — confirmed working 2026-08-06, mem0 search/write both returned real results this session | ~~agent memory~~ |
 | Local machine: enable Studio's built-in MCP server + Quick Connect Claude Code (`docs/runbooks/roblox-studio-mcp.md`) | Studio-side verification, playtest evidence for `reviewer-reality` |
+| Studio pass: M3's corrected fishing roles, M5's serve verb/gold/freshness-decay feel, M6's spoilage tick + FreshnessUI panel | Feel gate (M3), slice gate (Phase 2 exit) |
 | Branch protection on `main` | process safety |
 | Figma workspace | M6/M18 |
 

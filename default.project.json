@@ -40,6 +40,12 @@
           },
           "Economy_PlateResolved": {
             "$className": "RemoteEvent"
+          },
+          "Spoilage_InventoryUpdate": {
+            "$className": "RemoteEvent"
+          },
+          "Economy_GoldUpdate": {
+            "$className": "RemoteEvent"
           }
         },
         "RemoteFunctions": {
