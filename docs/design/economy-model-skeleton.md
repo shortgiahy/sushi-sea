@@ -10,7 +10,7 @@
 
 ## Scope
 
-PRD §12 Thread #3 frames the eventual numbers-session deliverable as a **progression-stage table** (rows: tutorial boat, new restaurant, mid, late, whale; columns: avg plate value, plates/hr, headcount, wages/hr, spoilage/hr, net income/hr, time to next tier). That table can't be filled in without first knowing *what formula produces each column*. This document is that substrate: a **flow-based** faucets-vs-sinks table (one row per gold-moving mechanism named in PRD §5/§7), each with a formula in named variables. The M7 numbers-session table's columns are read off these rows once values are assigned.
+PRD §12 Thread #3 frames the eventual numbers-session deliverable as a **progression-stage table** (rows: tutorial boat, new restaurant, mid, late, whale; columns: avg plate value, plates/hr, headcount, wages/hr, spoilage/hr, net income/hr, time to next tier). That table can't be filled in without first knowing *what formula produces each column*. This document is that substrate: a **flow-based** faucets-vs-sinks table (one row per cash-moving mechanism named in PRD §5/§7), each with a formula in named variables. The M7 numbers-session table's columns are read off these rows once values are assigned.
 
 Only mechanics the PRD already names are included — nothing here is invented. Source citations are given per row.
 
@@ -61,7 +61,7 @@ wages_per_hour = staffHeadcount × WAGE_RATE
 | Variable | Definition | Value |
 |---|---|---|
 | `staffHeadcount` | from `PlayerData.restaurant.staffHeadcount` (§7.3) | computed from hiring, not authored |
-| `WAGE_RATE` | gold/hour per staff member | `TBD (Giahy numbers session)` |
+| `WAGE_RATE` | cash/hour per staff member | `TBD (Giahy numbers session)` |
 
 **Note:** PRD §5's economy caution and ROADMAP's risk register both flag wages as **a weak dial** relative to spoilage rate and next-tier pricing — do not lean on `WAGE_RATE` to control the throughput cliff; it's here for completeness, not as a primary lever.
 

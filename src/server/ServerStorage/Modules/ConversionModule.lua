@@ -3,7 +3,7 @@
 --
 -- M4 scope: yield + grade resolution per the locked cook verb (docs/design/cook-verb.md §4.2,
 -- §4.3) — the two-stage manual verb (butchery trace -> yield, slicing stroke -> grade per loin).
--- Plate *value* in gold is explicitly out of scope here (PRD §6 names that M5, once FishTable's
+-- Plate *value* in cash is explicitly out of scope here (PRD §6 names that M5, once FishTable's
 -- cut_base[species][grade] lookup exists); this module only produces portions (a yield count with
 -- a grade label each), never a price.
 --

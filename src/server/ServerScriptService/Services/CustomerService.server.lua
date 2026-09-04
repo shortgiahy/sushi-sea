@@ -2,7 +2,7 @@
 --
 -- M10 scope: CustomerFlow.lua owns the pure stage-transition logic; this file owns everything it
 -- deliberately doesn't know about — the seating gate, popping/resolving a cookedPortions entry
--- when fulfillment can proceed, and crediting gold at payment.
+-- when fulfillment can proceed, and crediting cash at payment.
 --
 -- M12 addition: TrafficStat.lua owns prestige→stars and the traffic multiplier; this file reads
 -- `restaurant.prestigePoints` (only ever incremented on "paid," per PRD §4's "never drops") and
@@ -27,7 +27,7 @@ local EconomyConfig = require(ReplicatedStorage.Config.EconomyConfig)
 
 local RemoteEvents = ReplicatedStorage.Events.RemoteEvents
 local customerUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_CustomerUpdate
-local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
+local cashUpdateRemote: RemoteEvent = RemoteEvents.Economy_CashUpdate
 
 local TRAFFIC_TUNING: TrafficStat.TrafficTuning = {
     PRESTIGE_POINTS_PER_STAR = RestaurantConfig.PRESTIGE_POINTS_PER_STAR,
@@ -125,9 +125,9 @@ local function _tickPlayer(player: Player, data: any, now: number): ()
         elseif event == "paid" then
             local value = pendingPlateValue[updated.id] or 0
             pendingPlateValue[updated.id] = nil
-            data.economy.gold += value
+            data.economy.cash += value
             data.restaurant.prestigePoints += RestaurantConfig.PRESTIGE_POINTS_PER_SERVED_CUSTOMER
-            goldUpdateRemote:FireClient(player, data.economy.gold)
+            cashUpdateRemote:FireClient(player, data.economy.cash)
         end
 
         if event == "walked_out" then

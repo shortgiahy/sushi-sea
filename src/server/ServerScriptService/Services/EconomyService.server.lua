@@ -57,7 +57,7 @@ local cookStrokeRemote: RemoteEvent = RemoteEvents.Player_CookStroke
 local portionsResolvedRemote: RemoteEvent = RemoteEvents.Cooking_PortionsResolved
 local servePlateRemote: RemoteEvent = RemoteEvents.Player_ServePlate
 local plateResolvedRemote: RemoteEvent = RemoteEvents.Economy_PlateResolved
-local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
+local cashUpdateRemote: RemoteEvent = RemoteEvents.Economy_CashUpdate
 local purchaseStorageTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseStorageTier
 local storageTierUpdateRemote: RemoteEvent = RemoteEvents.Storage_TierUpdate
 local placeInAgingLockerRemote: RemoteEvent = RemoteEvents.Player_PlaceInAgingLocker
@@ -629,7 +629,7 @@ local function _onCookStroke(player: Player, payload: any): ()
     _resolveCook(player, data, fish, pending.traceAccuracy, pending.strokeQuality)
 end
 
--- Boat serve verb (M5, PRD §4/§5): pure delivery — resolves one cookedPortions entry into gold
+-- Boat serve verb (M5, PRD §4/§5): pure delivery — resolves one cookedPortions entry into cash
 -- via PlateValueResolver and removes it from inventory. No order matching, no plating minigame;
 -- the "verb" is the button press itself (docs/design/cook-verb.md's serve-verb scope).
 local function _onServePlate(player: Player, payload: any): ()
@@ -686,10 +686,10 @@ local function _onServePlate(player: Player, payload: any): ()
     }, PLATE_VALUE_TUNING)
 
     table.remove(data.cookedPortions, portionIndex)
-    data.economy.gold += plateValue
+    data.economy.cash += plateValue
 
     plateResolvedRemote:FireClient(player, plateValue, breakdown)
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
 end
 
 -- Storage tier purchase (M8, PRD §12 Thread #5 partial resolution). No dedicated PurchasingService
@@ -708,14 +708,14 @@ local function _onPurchaseStorageTier(player: Player): ()
     if not tierData then
         return -- already at EconomyConfig.MAX_STORAGE_TIER — expected-failure path, not an error
     end
-    if data.economy.gold < tierData.upgradeCost then
+    if data.economy.cash < tierData.upgradeCost then
         return -- can't afford it — expected-failure path (PRD §8), not an error
     end
 
-    data.economy.gold -= tierData.upgradeCost
+    data.economy.cash -= tierData.upgradeCost
     data.storage.tier = nextTier
 
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
     local afterNextTierData = EconomyConfig.STORAGE_TIERS[nextTier + 1]
     storageTierUpdateRemote:FireClient(player, {
         tier = data.storage.tier,
@@ -755,14 +755,14 @@ local function _onPurchaseAgingLockerTier(player: Player): ()
     if not tierData then
         return -- already at AgingConfig.MAX_LOCKER_TIER — expected-failure path, not an error
     end
-    if data.economy.gold < tierData.upgradeCost then
+    if data.economy.cash < tierData.upgradeCost then
         return
     end
 
-    data.economy.gold -= tierData.upgradeCost
+    data.economy.cash -= tierData.upgradeCost
     data.agingLockerEquipment.tier = nextTier
 
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
     _pushAgingLockerUpdate(player, data)
 end
 

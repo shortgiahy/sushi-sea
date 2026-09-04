@@ -13,12 +13,12 @@ local RestaurantConfig = require(ReplicatedStorage.Config.RestaurantConfig)
 local AgingConfig = require(ReplicatedStorage.Config.AgingConfig)
 local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
 
--- M6 addition: FreshnessUI's gold display needs an initial value on join, not just the delta
+-- M6 addition: FreshnessUI's cash display needs an initial value on join, not just the delta
 -- EconomyService.server.lua already pushes after each serve — this is the one place a freshly
--- loaded player's starting gold is known.
-local goldUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Economy_GoldUpdate
+-- loaded player's starting cash is known.
+local cashUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Economy_CashUpdate
 
--- M8 addition: same reasoning as goldUpdateRemote — a freshly loaded player's storage tier/
+-- M8 addition: same reasoning as cashUpdateRemote — a freshly loaded player's storage tier/
 -- capacity is only known here, right after load.
 local storageTierUpdateRemote: RemoteEvent = ReplicatedStorage.Events.RemoteEvents.Storage_TierUpdate
 
@@ -115,14 +115,14 @@ local function _creditOfflineBank(data: any): ()
         wageRatePerHourPerStaff = 0,
     })
 
-    data.economy.gold += netBank
+    data.economy.cash += netBank
     data.economy.offlineSnapshotAt = os.time() -- PRD §7.4 step 7: clear the snapshot after crediting
 end
 
 Players.PlayerAdded:Connect(function(player: Player)
     local data = service:load(player.UserId, player.Name)
     _creditOfflineBank(data)
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
 
     local tierData = EconomyConfig.STORAGE_TIERS[data.storage.tier] or EconomyConfig.STORAGE_TIERS[0]
     local nextTierData = EconomyConfig.STORAGE_TIERS[data.storage.tier + 1]

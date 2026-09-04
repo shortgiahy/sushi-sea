@@ -5,13 +5,13 @@
 -- deviation FishingCatch.lua/PlateValueResolver.lua/SpoilageCalculator.lua already made and
 -- documented. CustomerService.server.lua is the sole caller, and owns everything this module
 -- doesn't know about: seating gate (a customer is only created once a seat is confirmed free),
--- popping/resolving a cookedPortions entry when fulfillment can proceed, and crediting gold at
+-- popping/resolving a cookedPortions entry when fulfillment can proceed, and crediting cash at
 -- payment. This module only tracks which stage a customer is in and when to move to the next one.
 --
 -- "No order matching" (PRD §4/docs/design/cook-verb.md) means ordering has nothing to decide —
 -- it's a fixed-duration pacing beat, not a menu choice. Fulfillment is the one event-driven stage:
 -- it waits on `hasPlateReady` (kitchen throughput is the primary bottleneck, PRD §4) and times out
--- into a walkout if the kitchen never catches up — PRD's "gold lost to walkouts" is the potential
+-- into a walkout if the kitchen never catches up — PRD's "cash lost to walkouts" is the potential
 -- sale that never happened, not a penalty deducted from anything.
 local CustomerFlow = {}
 

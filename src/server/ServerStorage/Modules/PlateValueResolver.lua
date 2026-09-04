@@ -51,7 +51,7 @@ local function _resolveFreshnessPolish(elapsedSeconds: number, tuning: PlateValu
     return math.clamp(polish, tuning.CLAMP_FRESHNESS_MIN, tuning.CLAMP_FRESHNESS_MAX)
 end
 
--- The canonical plate-value resolution (PRD §5). Returns the resolved gold value plus a breakdown
+-- The canonical plate-value resolution (PRD §5). Returns the resolved cash value plus a breakdown
 -- of the four multiplier terms — safe to send to the client for receipt display (PRD §7.2's
 -- Economy_PlateResolved schema) because it's already-resolved output, not a component the client
 -- could spoof; the anti-spoof invariant (PRD §5) is about computation authority, not display data.

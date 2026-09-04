@@ -26,7 +26,7 @@ end
 -- so a schema that can't survive an encode/decode cycle would silently corrupt on a real save.
 do
     local original = PlayerDataSchema.newDefault()
-    original.economy.gold = 1250
+    original.economy.cash = 1250
     original.skills.fishing.level = 7
     original.skills.fishing.xp = 340
     table.insert(original.inventory, { id = "uuid-1", species = "salmon", caughtAt = 1718000000 })
@@ -61,7 +61,7 @@ do
     assert(migrated.skills.fishing.level == 5, "migration must preserve existing fishing level")
     assert(migrated.skills.fishing.xp == 120, "migration must preserve existing fishing xp")
     assert(migrated.skills.cooking.level == 1, "migration must fill in missing skills with defaults")
-    assert(migrated.economy.gold == 999, "migration must preserve existing gold")
+    assert(migrated.economy.cash == 999, "migration must preserve existing gold as cash")
     assert(migrated.economy.tutorialLoanOwed == 500, "migration must fill in missing economy fields with defaults")
     assert(
         type(migrated.inventory) == "table" and #migrated.inventory == 0,
@@ -82,7 +82,7 @@ do
         fresh.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
         "nil input must produce current-schema default data"
     )
-    assert(fresh.economy.gold == 0, "fresh default must start with zero gold")
+    assert(fresh.economy.cash == 0, "fresh default must start with zero cash")
     print("PlayerDataSchema.spec: nil input -> fresh default OK")
 end
 
@@ -123,7 +123,7 @@ do
         "a v1 save must also pick up storage.tier defaulted by the later v2 -> v3 step"
     )
     assert(migrated.skills.cooking.level == 2, "v1 -> current migration must not disturb existing skill data")
-    assert(migrated.economy.gold == 300, "v1 -> current migration must not disturb existing economy data")
+    assert(migrated.economy.cash == 300, "v1 -> current migration must not disturb existing economy data")
     assert(
         #migrated.inventory == 1 and migrated.inventory[1].id == "uuid-2",
         "v1 -> current migration must not disturb existing inventory"
@@ -167,7 +167,7 @@ do
         "a v2 save must also pick up restaurant.staff defaulted by the later v3 -> v4 step"
     )
     assert(migrated.restaurant.staffHeadcount == nil, "the legacy staffHeadcount field must be dropped")
-    assert(migrated.economy.gold == 750, "v2 -> current migration must not disturb existing economy data")
+    assert(migrated.economy.cash == 750, "v2 -> current migration must not disturb existing economy data")
     assert(
         #migrated.cookedPortions == 1 and migrated.cookedPortions[1].id == "uuid-3",
         "v2 -> current migration must not disturb existing cookedPortions"
@@ -215,12 +215,15 @@ do
     assert(migrated.restaurant.tier == 1, "v3 -> current migration must not disturb existing restaurant.tier")
     assert(migrated.restaurant.prestigePoints == 5, "v3 -> current migration must not disturb existing prestigePoints")
     assert(migrated.storage.tier == 1, "v3 -> current migration must not disturb existing storage.tier")
-    assert(migrated.economy.gold == 4200, "v3 -> current migration must not disturb existing economy data")
+    assert(migrated.economy.cash == 4200, "v3 -> current migration must not disturb existing economy data")
     print("PlayerDataSchema.spec: v3 -> current migration (staff roster replaces staffHeadcount + later steps) OK")
 end
 
--- v4 -> v5 (M15): a real schema-v4 save (no agingLockerEquipment field at all, predating its
--- addition) must gain a default tier of 0 and land on v5, without disturbing any v4 field.
+-- v4 -> current (M15's step, then whatever runs after it): a real schema-v4 save (no
+-- agingLockerEquipment field at all, predating its addition) must gain a default tier of 0 and
+-- walk the rest of the chain, without disturbing any v4 field. Asserts against the dynamic current
+-- version for the same reason the v1/v2/v3 tests above do — M15's v4 -> v5 is no longer the last
+-- step now that the v5 -> v6 currency rename exists.
 do
     local v4Save = {
         skills = {
@@ -241,27 +244,64 @@ do
 
     local migrated = PlayerDataSchema.migrate(v4Save)
 
-    assert(migrated.meta.schemaVersion == 5, "a v4 save must migrate forward to schemaVersion 5")
+    assert(
+        migrated.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
+        "a v4 save must migrate all the way forward to the current schemaVersion"
+    )
     assert(
         type(migrated.agingLockerEquipment) == "table" and migrated.agingLockerEquipment.tier == 0,
         "a v4 save must gain a default agingLockerEquipment.tier of 0"
     )
-    assert(migrated.restaurant.tier == 2, "v4 -> v5 migration must not disturb existing restaurant.tier")
-    assert(migrated.storage.tier == 2, "v4 -> v5 migration must not disturb existing storage.tier")
-    assert(migrated.economy.gold == 8000, "v4 -> v5 migration must not disturb existing economy data")
+    assert(migrated.restaurant.tier == 2, "v4 -> current migration must not disturb existing restaurant.tier")
+    assert(migrated.storage.tier == 2, "v4 -> current migration must not disturb existing storage.tier")
+    assert(migrated.economy.cash == 8000, "v4 -> current migration must preserve existing gold as cash")
     assert(
         #migrated.inventory == 1 and migrated.inventory[1].id == "uuid-4",
-        "v4 -> v5 migration must not disturb existing inventory"
+        "v4 -> current migration must not disturb existing inventory"
     )
-    print("PlayerDataSchema.spec: v4 -> v5 migration (agingLockerEquipment addition) OK")
+    print("PlayerDataSchema.spec: v4 -> current migration (agingLockerEquipment addition + later steps) OK")
+end
+
+-- v5 -> current (currency rename, 2026-09-04): a real schema-v5 save still has `economy.gold`, not
+-- `economy.cash` — this must migrate to `cash` carrying the old gold value forward, with `gold`
+-- dropped, same "real field rename" shape as the v2 -> current test's staffHeadcount check above.
+do
+    local v5Save = {
+        skills = {
+            fishing = { level = 8, xp = 400 },
+            cooking = { level = 7, xp = 200 },
+            sailing = { level = 1, xp = 0 },
+            hospitality = { level = 1, xp = 0 },
+            purchasing = { level = 1, xp = 0 },
+        },
+        inventory = {},
+        cookedPortions = {},
+        agingLocker = {},
+        agingLockerEquipment = { tier = 1 },
+        restaurant = { tier = 2, staff = {}, prestigePoints = 10, trophies = {} },
+        storage = { tier = 2 },
+        economy = { gold = 15000, offlineSnapshotAt = 0, offlineStockCount = 0, tutorialLoanOwed = 0 },
+        meta = { schemaVersion = 5, firstJoinAt = 1717999000, lastJoinAt = 1718000000 },
+    }
+
+    local migrated = PlayerDataSchema.migrate(v5Save)
+
+    assert(
+        migrated.meta.schemaVersion == PlayerDataSchema.SCHEMA_VERSION,
+        "a v5 save must migrate forward to the current schemaVersion"
+    )
+    assert(migrated.economy.cash == 15000, "a v5 save's gold value must carry forward into cash")
+    assert(migrated.economy.gold == nil, "the legacy gold field must be dropped once renamed to cash")
+    assert(migrated.agingLockerEquipment.tier == 1, "v5 -> current migration must not disturb existing equipment")
+    print("PlayerDataSchema.spec: v5 -> current migration (gold -> cash rename) OK")
 end
 
 -- Already-current data must pass through the chain without being altered or re-defaulted.
 do
     local current = PlayerDataSchema.newDefault()
-    current.economy.gold = 42
+    current.economy.cash = 42
     local result = PlayerDataSchema.migrate(current)
-    assert(result.economy.gold == 42, "already-current data must not be reset by migrate()")
+    assert(result.economy.cash == 42, "already-current data must not be reset by migrate()")
     print("PlayerDataSchema.spec: already-current data passes through unchanged OK")
 end
 

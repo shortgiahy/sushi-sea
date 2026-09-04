@@ -44,7 +44,7 @@
           "Spoilage_InventoryUpdate": {
             "$className": "RemoteEvent"
           },
-          "Economy_GoldUpdate": {
+          "Economy_CashUpdate": {
             "$className": "RemoteEvent"
           },
           "Player_PurchaseStorageTier": {

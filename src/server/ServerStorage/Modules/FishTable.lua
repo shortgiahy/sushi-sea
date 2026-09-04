@@ -1,4 +1,4 @@
--- FishTable: authored species -> cut_base[grade] gold lookup (PRD §5/§7.1). Hand-set values,
+-- FishTable: authored species -> cut_base[grade] cash lookup (PRD §5/§7.1). Hand-set values,
 -- never computed — EconomyService is the only reader, via PlateValueResolver's `cutBase` input.
 --
 -- M5 scope: covers the five species FishSpecies.lua currently has (that file's header already

@@ -45,7 +45,7 @@ local purchaseRestaurantTierRemote: RemoteEvent = RemoteEvents.Player_PurchaseRe
 local restaurantTierUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_TierUpdate
 local hireStaffRemote: RemoteEvent = RemoteEvents.Player_HireStaff
 local staffUpdateRemote: RemoteEvent = RemoteEvents.Restaurant_StaffUpdate
-local goldUpdateRemote: RemoteEvent = RemoteEvents.Economy_GoldUpdate
+local cashUpdateRemote: RemoteEvent = RemoteEvents.Economy_CashUpdate
 
 local function _pushRestaurantTierUpdate(player: Player, data: any): ()
     local tierData = RestaurantConfig.RESTAURANT_TIERS[data.restaurant.tier]
@@ -78,14 +78,14 @@ local function _onPurchaseRestaurantTier(player: Player): ()
     if not tierData then
         return -- already at RestaurantConfig.MAX_RESTAURANT_TIER — expected-failure path, not an error
     end
-    if data.economy.gold < tierData.upgradeCost then
+    if data.economy.cash < tierData.upgradeCost then
         return -- can't afford it — expected-failure path (PRD §8), not an error
     end
 
-    data.economy.gold -= tierData.upgradeCost
+    data.economy.cash -= tierData.upgradeCost
     data.restaurant.tier = nextTier
 
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
     _pushRestaurantTierUpdate(player, data)
 end
 
@@ -109,14 +109,14 @@ local function _onHireStaff(player: Player, payload: any): ()
     if data.restaurant.tier <= 0 then
         return -- no restaurant to staff yet — must buy at least tier 1 first
     end
-    if data.economy.gold < rarityTuning.hireCost then
+    if data.economy.cash < rarityTuning.hireCost then
         return
     end
 
-    data.economy.gold -= rarityTuning.hireCost
+    data.economy.cash -= rarityTuning.hireCost
     table.insert(data.restaurant.staff, { id = HttpService:GenerateGUID(false), rarity = rarity, hiredAt = os.time() })
 
-    goldUpdateRemote:FireClient(player, data.economy.gold)
+    cashUpdateRemote:FireClient(player, data.economy.cash)
     _pushStaffUpdate(player, data)
 end
 
@@ -204,8 +204,8 @@ task.spawn(function()
                 local wageCost = staffCount
                     * RestaurantConfig.WAGE_RATE_PER_HOUR_PER_STAFF
                     * (RestaurantConfig.RESTAURANT_TICK_INTERVAL_SECONDS / 3600)
-                data.economy.gold = math.max(0, data.economy.gold - wageCost)
-                goldUpdateRemote:FireClient(player, data.economy.gold)
+                data.economy.cash = math.max(0, data.economy.cash - wageCost)
+                cashUpdateRemote:FireClient(player, data.economy.cash)
 
                 for _, staffMember in data.restaurant.staff do
                     if #data.inventory <= 0 then

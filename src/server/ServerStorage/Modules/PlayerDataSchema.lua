@@ -1,7 +1,7 @@
 -- PlayerDataSchema: versioned player data shape + migration chain (PRD §7.3) — pure, no Roblox services
 local PlayerDataSchema = {}
 
-local SCHEMA_VERSION = 5
+local SCHEMA_VERSION = 6
 local TUTORIAL_LOAN_DEFAULT = 500
 
 export type SkillEntry = { level: number, xp: number }
@@ -62,7 +62,7 @@ export type AgingLockerEquipment = {
 }
 
 export type Economy = {
-    gold: number,
+    cash: number,
     offlineSnapshotAt: number,
     offlineStockCount: number,
     tutorialLoanOwed: number,
@@ -117,7 +117,7 @@ function PlayerDataSchema.newDefault(): PlayerData
             tier = 0,
         },
         economy = {
-            gold = 0,
+            cash = 0,
             offlineSnapshotAt = 0,
             offlineStockCount = 0,
             tutorialLoanOwed = TUTORIAL_LOAN_DEFAULT,
@@ -173,8 +173,8 @@ MIGRATIONS[0] = function(old: any): PlayerData
     }
 
     local oldEconomy = if type(old.economy) == "table" then old.economy else {}
-    local economy: Economy = {
-        gold = if type(oldEconomy.gold) == "number" then oldEconomy.gold else defaults.economy.gold,
+    local economy = {
+        gold = if type(oldEconomy.gold) == "number" then oldEconomy.gold else 0,
         offlineSnapshotAt = if type(oldEconomy.offlineSnapshotAt) == "number"
             then oldEconomy.offlineSnapshotAt
             else defaults.economy.offlineSnapshotAt,
@@ -248,6 +248,20 @@ MIGRATIONS[4] = function(old: any): PlayerData
         tier = if type(oldAgingLockerEquipment.tier) == "number" then oldAgingLockerEquipment.tier else 0,
     }
     old.meta.schemaVersion = 5
+    return old
+end
+
+-- v5 -> v6 (currency rename, 2026-09-04): Giahy wants the currency displayed as dollars ("$")
+-- rather than "gold," Dave the Diver style — renames `economy.gold` to `economy.cash`, same
+-- pure-rename shape as v3 -> v4's staffHeadcount -> staff rename above.
+MIGRATIONS[5] = function(old: any): PlayerData
+    local oldEconomy = if type(old.economy) == "table" then old.economy else {}
+    old.economy.cash = if type(oldEconomy.cash) == "number"
+        then oldEconomy.cash
+        elseif type(oldEconomy.gold) == "number" then oldEconomy.gold
+        else 0
+    old.economy.gold = nil
+    old.meta.schemaVersion = 6
     return old
 end
 

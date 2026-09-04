@@ -2,7 +2,7 @@
 --
 -- M6 gray-box implementation: a small always-visible panel listing raw inventory fish and cooked
 -- portions with their server-pushed freshness state (Spoilage_InventoryUpdate), plus a running
--- gold total (Economy_GoldUpdate). Same one-ScreenGui-per-controller shape BoatCookController
+-- cash total (Economy_CashUpdate). Same one-ScreenGui-per-controller shape BoatCookController
 -- already established; positioned top-left so it never overlaps that HUD (top-center). A spoiled
 -- entry is never rendered here — SpoilageService.server.lua tosses it before snapshotting, so
 -- "spoiled" never appears in an update payload; only "fresh"/"stale" need a color.
@@ -29,7 +29,7 @@ local STATE_COLOR: { [string]: Color3 } = {
     stale = Color3.fromRGB(190, 160, 60),
 }
 
-local goldLabel: TextLabel? = nil
+local cashLabel: TextLabel? = nil
 local inventoryContainer: Frame? = nil
 local portionsContainer: Frame? = nil
 local storageLabel: TextLabel? = nil
@@ -77,16 +77,16 @@ local function _buildGui(): ()
     root.BackgroundTransparency = 1
     root.Parent = screenGui
 
-    local gold = Instance.new("TextLabel")
-    gold.Name = "Gold"
-    gold.Size = UDim2.new(1, 0, 0, 22)
-    gold.BackgroundTransparency = 1
-    gold.TextColor3 = Color3.fromRGB(240, 210, 100)
-    gold.TextXAlignment = Enum.TextXAlignment.Left
-    gold.Font = Enum.Font.SourceSansBold
-    gold.TextSize = 18
-    gold.Text = "Gold: 0"
-    gold.Parent = root
+    local cash = Instance.new("TextLabel")
+    cash.Name = "Cash"
+    cash.Size = UDim2.new(1, 0, 0, 22)
+    cash.BackgroundTransparency = 1
+    cash.TextColor3 = Color3.fromRGB(90, 200, 120)
+    cash.TextXAlignment = Enum.TextXAlignment.Left
+    cash.Font = Enum.Font.SourceSansBold
+    cash.TextSize = 18
+    cash.Text = "$0"
+    cash.Parent = root
 
     local invHeader = Instance.new("TextLabel")
     invHeader.Name = "InventoryHeader"
@@ -171,7 +171,7 @@ local function _buildGui(): ()
 
     screenGui.Parent = playerGui
 
-    goldLabel = gold
+    cashLabel = cash
     inventoryContainer = invContainer
     portionsContainer = portContainer
     storageLabel = storage
@@ -202,7 +202,7 @@ local function _refreshStorageDisplay(): ()
     end
     if upgradeButton then
         if storageTierState.nextTierCost then
-            upgradeButton.Text = ("Upgrade Storage (%dg)"):format(storageTierState.nextTierCost)
+            upgradeButton.Text = ("Upgrade Storage ($%d)"):format(storageTierState.nextTierCost)
             upgradeButton.Visible = true
         else
             upgradeButton.Visible = false -- already at EconomyConfig.MAX_STORAGE_TIER
@@ -238,9 +238,9 @@ local function _onInventoryUpdate(
     _refreshStorageDisplay()
 end
 
-local function _onGoldUpdate(gold: number): ()
-    if goldLabel then
-        goldLabel.Text = ("Gold: %d"):format(math.floor(gold))
+local function _onCashUpdate(cash: number): ()
+    if cashLabel then
+        cashLabel.Text = ("$%d"):format(math.floor(cash))
     end
 end
 
@@ -271,7 +271,7 @@ end
 function FreshnessUI.init(): ()
     local remoteEvents = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RemoteEvents")
     local inventoryUpdateRemote = remoteEvents:WaitForChild("Spoilage_InventoryUpdate") :: RemoteEvent
-    local goldUpdateRemote = remoteEvents:WaitForChild("Economy_GoldUpdate") :: RemoteEvent
+    local cashUpdateRemote = remoteEvents:WaitForChild("Economy_CashUpdate") :: RemoteEvent
     local storageTierUpdateRemote = remoteEvents:WaitForChild("Storage_TierUpdate") :: RemoteEvent
     local agingLockerUpdateRemote = remoteEvents:WaitForChild("Aging_LockerUpdate") :: RemoteEvent
     purchaseStorageTierRemote = remoteEvents:WaitForChild("Player_PurchaseStorageTier") :: RemoteEvent
@@ -280,7 +280,7 @@ function FreshnessUI.init(): ()
     _refreshStorageDisplay()
 
     inventoryUpdateRemote.OnClientEvent:Connect(_onInventoryUpdate)
-    goldUpdateRemote.OnClientEvent:Connect(_onGoldUpdate)
+    cashUpdateRemote.OnClientEvent:Connect(_onCashUpdate)
     storageTierUpdateRemote.OnClientEvent:Connect(_onStorageTierUpdate)
     agingLockerUpdateRemote.OnClientEvent:Connect(_onAgingLockerUpdate)
 

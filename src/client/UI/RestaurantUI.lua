@@ -200,7 +200,7 @@ local function _refreshTierDisplay(): ()
     end
     if upgradeTierButton then
         if restaurantTierState.nextTierCost then
-            upgradeTierButton.Text = ("Upgrade Restaurant (%dg)"):format(restaurantTierState.nextTierCost)
+            upgradeTierButton.Text = ("Upgrade Restaurant ($%d)"):format(restaurantTierState.nextTierCost)
             upgradeTierButton.Visible = true
         else
             upgradeTierButton.Visible = false

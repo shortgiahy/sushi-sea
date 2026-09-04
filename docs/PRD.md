@@ -1,6 +1,6 @@
 # Sushi Sea — PRD
 
-Single source of truth for Sushi Sea. **A Roblox hybrid of *Dave the Diver*, *RuneScape*, *Fisch*, and a restaurant sim.** Fish the open seas, process the catch, run a sushi restaurant. The supply chain *is* the game — there is no wholesale fish market, so every fish must flow through the kitchen to become gold.
+Single source of truth for Sushi Sea. **A Roblox hybrid of *Dave the Diver*, *RuneScape*, *Fisch*, and a restaurant sim.** Fish the open seas, process the catch, run a sushi restaurant. The supply chain *is* the game — there is no wholesale fish market, so every fish must flow through the kitchen to become cash.
 
 **How to read this doc.** Locked material (§1–§5, §7–§11) is settled — do not relitigate unless Giahy explicitly reopens it. Open Threads (§12) are open — never fill one in unilaterally; surface it and run grill-me. Where something is *recommended / first-pass*, treat it as a default to confirm, not gospel.
 
@@ -9,8 +9,8 @@ Single source of truth for Sushi Sea. **A Roblox hybrid of *Dave the Diver*, *Ru
 ## 1. Vision
 
 - **One-line:** Fish the open seas, process the catch, run a sushi restaurant.
-- **Core conceit:** The supply chain *is* the game. No wholesale fish market, ever — every fish must flow through the kitchen to become gold. Both halves (sea, restaurant) stay load-bearing by construction.
-- **Core loop:** Cast → hook → reel → cook → serve → gold → reinvest → reach deeper water / better restaurant.
+- **Core conceit:** The supply chain *is* the game. No wholesale fish market, ever — every fish must flow through the kitchen to become cash. Both halves (sea, restaurant) stay load-bearing by construction.
+- **Core loop:** Cast → hook → reel → cook → serve → cash → reinvest → reach deeper water / better restaurant.
 - **Retention thesis:** Game *feel* (the rod), not content volume, is the binding constraint on retention (council ruling, 2026-06-17). Perishability is the dial tuned to the return target.
 
 | Field | Value |
@@ -29,7 +29,7 @@ Single source of truth for Sushi Sea. **A Roblox hybrid of *Dave the Diver*, *Ru
 Five principles that resolve most new questions. If a principle resolves a question, proceed and note the reasoning in the build log. If it doesn't, it's an Open Thread — surface it.
 
 1. **Risk is always available, never forced, always trades for acceleration — and means opportunity cost, not punishment.** Storm zones, the aging locker, the tutorial loan, and legendary hunts all express this. Failure forfeits a *gain you could have had*, never destroys something you own. A botched legendary costs nothing but the moment; an over-aged fish doesn't ruin — it sits there not making money. *You missed out* beats *you lost everything*. Every new risk surface must obey this.
-2. **The supply chain is the only path to gold.** No wholesale market, ever. Both halves stay load-bearing by construction.
+2. **The supply chain is the only path to cash.** No wholesale market, ever. Both halves stay load-bearing by construction.
 3. **Perform every system manually once before it can be automated or expanded.** Manual cast before bite depth. Manual cook and serve on the boat before hiring cooks and servers. Manual sale before staff. Manual cook before the presence aura lifts staff output. This is a literal code path (§7.6), not a philosophy.
 4. **Author the bands, clamp the multipliers.** Large values are hand-authored lookups. Formula modifiers are clamped. Nothing large emerges from a chain of multiplications.
 5. **Experimentation lives in risk management** (the dry-aging cash-out decision), not combinatorics (recipe mixing).
@@ -42,8 +42,8 @@ Five principles that resolve most new questions. If a principle resolves a quest
 - **Open Threads (§12) are open.** Never fill one in unilaterally — grill-me, get the answer, *then* build.
 - **Authored vs. computed discipline** (pillar 4) and **manual before automatic** (pillar 3) are code-level constraints, not vibes.
 - **Stop and surface if a task pushes toward any of these:**
-  - **No crafting** — all durable goods (rods, boats, equipment, capacity, restaurant tiers) are *bought* with gold ("Purchasing," not "Crafting"). No assembly, materials, or gathering.
-  - **No wholesale market** — fish only becomes gold through a served plate.
+  - **No crafting** — all durable goods (rods, boats, equipment, capacity, restaurant tiers) are *bought* with cash ("Purchasing," not "Crafting"). No assembly, materials, or gathering.
+  - **No wholesale market** — fish only becomes cash through a served plate.
   - **No shared legendary encounters** — catches are per-player rolls; encounters are structurally independent. No kill-steal, no tag-team, no contested spawns.
   - **No total-loss states** — aging is a cash-out timer, not a ruin timer.
   - **No recurring debt** — debt exists only as the tutorial loan + early overarching goal.
@@ -55,7 +55,7 @@ Five principles that resolve most new questions. If a principle resolves a quest
 2. **Catches are per-player, client-side rolls.** Two players on the same boat cast into the same water; one may reel a salmon while the other hooks a Kraken. No shared catch, no contested encounter, no kill-stealing — *structurally impossible*, not balanced away.
 3. **Aging is a cash-out timer, NOT a ruin timer.** No total-loss state. Risk in this game is opportunity cost, not punishment — game-wide stance.
 4. **Debt is tutorial-and-early-goal only — NOT a permanent risk pillar.** Scoped to the onboarding loan and the early overarching goal. Never a recurring late-game mechanic.
-5. **"Crafting" skill is really "Purchasing."** No crafting exists. All durable goods are bought with gold. No assembly, materials, or gathering.
+5. **"Crafting" skill is really "Purchasing."** No crafting exists. All durable goods are bought with cash. No assembly, materials, or gathering.
 
 Clarification (a tightening, not a contradiction): **offline service is freshness-governed, not storage-governed.** Storage upgrades raise capacity *and* slow spoilage; the real cap on an offline coast is how fast stock spoils.
 
@@ -76,7 +76,7 @@ Clarification (a tightening, not a contradiction): **offline service is freshnes
 Player freely toggles between sea and restaurant. NPC staff run the restaurant live and while offline. Offline service is throttled and capped; the cap is governed by **freshness/spoilage**, with capacity scaling on the storage/restaurant upgrade line (early game stalls in a few hours; late game can coast 12h+). Offline earnings are a **computed bank** collected on return, **net of payroll**.
 
 ### The leash: perishability
-Raw fish decays on a freshness timer. Forces restocking, blocks hoard-and-coast, acts as a gold sink, and is **the dial tuned to hit the 24–48h return target**. Fresh serves at full value; stale is penalized; spoiled is tossed. Spoilage runs while offline.
+Raw fish decays on a freshness timer. Forces restocking, blocks hoard-and-coast, acts as a cash sink, and is **the dial tuned to hit the 24–48h return target**. Fresh serves at full value; stale is penalized; spoiled is tossed. Spoilage runs while offline.
 
 **The portion clock.** Cutting resets the clock — a portion does not inherit its fish's `caughtAt`, it starts its own timer at the cut. `portion_lifetime = grade_lifetime[grade] × fish_freshness_at_cut`. Clocks are per-portion and independent; portion *count* does not affect lifetime. Higher grades run out faster (`otoro < chutoro < akami`), aiming anti-hoard pressure at premium stock. Scaling by the parent fish's freshness *at the moment of the cut* is what closes the laundering loophole — without it a player holds fish to near-spoiled, cuts to refresh, and spoilage stops leashing anyone who notices.
 
@@ -109,7 +109,7 @@ Fishing level gates *outcome*, not *location*. Anyone can sail into a storm; und
 - **Aura hazard to solve at M17:** presence-boosts-quality creates an incentive to *idle* in the restaurant, competing with fishing — the other half of the game. The aura needs a shape that rewards **visiting rather than parking** (diminishing over a session, or a per-shift cap).
 
 ### Rating
-Single prestige number that accumulates toward 5 stars, **never drops**, public. A recoverable popularity layer is shelved as a known expansion. In-the-moment stakes lean on gold lost to walkouts.
+Single prestige number that accumulates toward 5 stars, **never drops**, public. A recoverable popularity layer is shelved as a known expansion. In-the-moment stakes lean on cash lost to walkouts.
 
 ### Onboarding & the boat → restaurant transition
 - **The dinky sailboat is the first restaurant:** fish at the stern, cook midship, sell at the bow — the whole loop in one camera frame.
@@ -151,7 +151,7 @@ Opt-in, equipment-gated, limited capacity. A fish placed in an aging locker **le
 - **Tuning note:** storm window must be long enough that *alert → sail to sector → fight* is achievable. Hook rarity and storm duration are paired dials.
 
 ### Gifting
-Rare-fish gifting is in — friend-boost and virality engine. Gifted legendaries can be mounted or eventually butchered (Cooking-gated) but **not cheaply liquidated** — no whale-to-alt gold pipe.
+Rare-fish gifting is in — friend-boost and virality engine. Gifted legendaries can be mounted or eventually butchered (Cooking-gated) but **not cheaply liquidated** — no whale-to-alt cash pipe.
 
 ### Debt
 Exists **only** as the tutorial loan and the early overarching goal.
@@ -221,7 +221,7 @@ Each module is one independently buildable + verifiable unit. Build in order; do
 | M3 ⚡ | **Fishing feel slice** *(gray-box)* | M0, M2 | `FishingController` cast→hook→reel + server-side catch validation. **Feel gate:** blind playtester finds the rod alone satisfying. Placeholder numbers. |
 | M4 ⚡ | **Conversion core + cook verb** | M0, M3 | `ConversionModule.cook(fish, performance)→portions` (canonical, §7.6) with the `performance` interface in place; `BoatCookController` drives both stages — camera-locked board, trace→yield, stroke→grade, `prepTier` honored, result readout against the ceiling. Manual cook works on the boat. |
 | M5 ⚡ | **Serve verb + economy faucet** | M4 | Boat serve verb (pure delivery, no order matching); `EconomyService` plate resolution wired to a **graded** `FishTable` — `cut_base[species][grade]`, ~10 species × 3 grades; all 4 multipliers server-side. |
-| M6 ⚡ | **Basic spoilage + slice UI** | M5 | `SpoilageService` basic freshness tick; `FreshnessUI` + gold UI. **Slice gate:** blind playtester finds cast→cook→serve→gold satisfying with gray-box. |
+| M6 ⚡ | **Basic spoilage + slice UI** | M5 | `SpoilageService` basic freshness tick; `FreshnessUI` + cash UI. **Slice gate:** blind playtester finds cast→cook→serve→cash satisfying with gray-box. |
 | M7 | **Economy tuning model** *(numbers)* | M6 | Open Threads #3+#5 jointly. 5-row faucets−sinks table; net income/hr grows slower than next-tier cost; throughput cliff ≈ week 6. |
 | M8 | **Spoilage + storage tiers** | M7 | Real decay rates; storage tier ladder (capacity + spoilage slowdown). Coast lengths per tier match the 24–48h dial. |
 | M9 | **Offline bank** | M8 | `OfflineBankCalculator` snapshot-in/out (§7.4), net of wages + spoilage, `max(0, …)`. Closed-form payout correct on return. |
@@ -334,7 +334,7 @@ StarterGui/                         -- UI containers only; logic lives in Starte
     trophies       = {},  -- { species, mountedAt } — legendary mounts
   },
   economy = {
-    gold                = 0,
+    cash                = 0,
     offlineSnapshotAt   = 0,    -- os.time() at last logout
     offlineStockCount   = 0,    -- fish in inventory at snapshot
     tutorialLoanOwed    = 500,  -- zeroed after repayment; never reused
@@ -358,7 +358,7 @@ On logout: save `offlineSnapshotAt = os.time()` and `offlineStockCount = #invent
 4. `grossIncome = platesServed × avgPlateValueAtLogout`
 5. `wages = data.restaurant.staffHeadcount × WAGE_RATE × elapsed`
 6. `netBank = max(0, grossIncome - wages)` — never negative
-7. Add `netBank` to gold; clear snapshot fields
+7. Add `netBank` to cash; clear snapshot fields
 
 **Do not replay the restaurant tick-by-tick.** Closed-form only.
 
@@ -571,7 +571,7 @@ Stance resolved (freshness-governed; storage raises capacity and slows spoilage)
 - **Yelp prestige formula:** how shifts accumulate toward 5 stars; what counts as a "bad shift"
 - **Hidden traffic stat formula:** exact weighting of Yelp + cosmetics + Hospitality into spawn volume
 - ~~**Omakase counter mechanics**~~ — resolved 2026-07-29 with #1: dropped as a separate product; replaced by the presence aura (quality + speed multiplier on staff `performance`). Still unset: the aura's **magnitude** and its anti-parking shape (session decay or per-shift cap) — M17
-- **Walkout rules:** wait time, gold lost, tie-in to the (shelved) popularity layer's eventual hook
+- **Walkout rules:** wait time, cash lost, tie-in to the (shelved) popularity layer's eventual hook
 - **Storm catalog:** weather types → legendaries, durations, zone sizes, broadcast lead time
 
 ---

@@ -233,7 +233,7 @@ end
 
 -- Weighted-random species pick + authored quality bucket. Returns only catch identity (species,
 -- quality) — never a price or plate value. That resolution is explicitly M5's job (PRD §5): the
--- client must never see economy components, and this module has no notion of gold at all.
+-- client must never see economy components, and this module has no notion of cash at all.
 function FishingCatch.rollCatch(
     species: { SpeciesEntry },
     qualityScore: number,
