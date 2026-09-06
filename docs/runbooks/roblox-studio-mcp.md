@@ -47,7 +47,7 @@ claude mcp add Roblox_Studio --scope user -- /Applications/RobloxStudio.app/Cont
 
 Read the indicator correctly: it counts *connected clients*. Enabling the toggle alone shows nothing — that is expected, not a failure.
 
-**Scope is `user`, never committed to `.mcp.json`.** `user` writes to `~/.claude.json` (`%USERPROFILE%\.claude.json`) — machine-wide, private, out of git. `local` also stays out of git but binds to one project directory, so Studio access vanishes the moment you work from anywhere else. Committing to `.mcp.json` is the wrong answer either way: the command is an OS-specific absolute path, so it breaks on the other machine and fails in every cloud session. `.mcp.json` stays empty (same reasoning that moved mem0 to the plugin).
+**Scope is `user`, never committed to `.mcp.json`.** `user` writes to `~/.claude.json` (`%USERPROFILE%\.claude.json`) — machine-wide, private, out of git. `local` also stays out of git but binds to one project directory, so Studio access vanishes the moment you work from anywhere else. Committing to `.mcp.json` is the wrong answer either way: the command is an OS-specific absolute path, so it breaks on the other machine and fails in every cloud session. `.mcp.json` stays empty.
 
 ## Working rule — code lives in the repo; building lives in Studio (revised 2026-09-04)
 

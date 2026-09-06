@@ -512,7 +512,7 @@ sushi-sea/
   docs/PRD.md                   # this document — canonical
   docs/design/                  # locked-decision specs (cook verb, economy skeleton)
   docs/runbooks/                # Giahy-action runbooks (Studio MCP, publish)
-  HANDOFF.md TASKS.md BUILD_LOG.md ROADMAP.md
+  PROGRESS.md TASKS.md ROADMAP.md
   .claude/agents/               # the six-agent team
 ```
 
@@ -522,8 +522,8 @@ sushi-sea/
 
 A system is ✅ only when **all** hold: wired end-to-end (actually called by the running game, not just authored) · manually verified in a Studio playtest (or headless test for pure logic) · passes the code-reviewer agent · obeys §8 · CI green. At each module/phase exit gate, run **testing-reality-checker** with "is this actually done?" — it defaults to "needs work" and demands evidence; that is intentional.
 
-**Design session:** grill-me — one question at a time, walk the dependency tree, attach a recommended answer before Giahy decides. On lock: update §4 → check off in §12 → flip Build Log rows.
-**Implementation session:** read §7 + §8 → pick the right agent → write code → code-reviewer → commit. Log every session in `Build Log.md` (format there) and push before the container dies.
+**Design session:** grill-me — one question at a time, walk the dependency tree, attach a recommended answer before Giahy decides. On lock: update §4 → check off in §12 → update `PROGRESS.md`.
+**Implementation session:** read §7 + §8 → pick the right agent → write code → code-reviewer → commit. Update `PROGRESS.md` (format there) and push before the container dies.
 
 Team model (grill-me 2026-07-05; agents live in the game repo's `.claude/agents/`, tuned from agency-agents):
 
@@ -538,7 +538,7 @@ Team model (grill-me 2026-07-05; agents live in the game repo's `.claude/agents/
 
 - Orchestrator sessions run Sonnet; Haiku only for single-file mechanical tasks
 - Merge gate: feature branch → PR to `dev` (green CI + both reviewers) → Giahy gates `dev`→`main` at module boundaries
-- Reasoning lives in commits / PR Reasoning sections / repo `BUILD_LOG.md` — §8 comment rules unchanged
+- Reasoning lives in commits / PR Reasoning sections / repo `PROGRESS.md` — §8 comment rules unchanged
 - UI design tool: Figma (4th app alongside Studio, Blender, GitHub)
 
 ---

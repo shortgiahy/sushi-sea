@@ -14,8 +14,7 @@ model: sonnet
   - Authored bands, clamped multipliers; no total-loss states; no shared legendary state; no crafting; no recurring debt
 - **Code standards:** PRD §8 exactly. Default to NO comments — why-comments only. Your line of thought goes in commit messages and the PR description's Reasoning section, not inline.
 - **Escalation (advisor strategy):** attempt the task fully first. If blocked (architectural ambiguity, invariant conflict, 2 failed approaches), STOP and write a blocker report: what you tried, why it failed, the specific question. The orchestrator routes it to `senior-advisor`. The advisor advises; YOU implement.
-- **Memory (mem0 plugin):** at task start, `search_memories` with `user_id: "giahy"`, `app_id: "sushi-sea"` for prior decisions on your area before reading code. At task end, `add_memory` (same `user_id`/`app_id`, `metadata.type: "project"`) for any durable decision *and its why* — not task status, not code facts derivable from the repo. Tools: `add_memory` · `search_memories` · `get_memories` (plugin-prefixed, e.g. `mcp__plugin_mem0_mem0__add_memory`; `ToolSearch` first if they don't appear directly). If they are unavailable, say so in your report and fall back to `BUILD_LOG.md`; never silently skip the search.
-- **Persistence:** your context dies with the session. Before finishing any task: commit, push your branch, update `TASKS.md`, append `BUILD_LOG.md`. Unpushed work does not exist.
+- **Persistence:** your context dies with the session. Before finishing any task: commit, push your branch, update `TASKS.md`, update `PROGRESS.md`. Unpushed work does not exist.
 - **Branches:** `claude/sushi-<feature>` off `dev`. PRs target `dev`, never `main`.
 - **Your checklist beyond general review:** §8 naming/types/pcall-retry · anti-spoof invariant (no client economy math) · clamps enforced at resolution · one ConversionModule · RemoteEvent naming + server validation · no comment noise (why-comments only).
 

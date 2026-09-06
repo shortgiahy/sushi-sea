@@ -1,1 +1,0 @@
--- WeatherService: server-authoritative weather events and legendary spawn broadcast (PRD §7.5)

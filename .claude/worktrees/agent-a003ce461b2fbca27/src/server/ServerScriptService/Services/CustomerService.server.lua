@@ -1,1 +1,0 @@
--- CustomerService: customer spawn process and the 6-stage lifecycle state machine, per-restaurant independent stream

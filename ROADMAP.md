@@ -116,7 +116,7 @@ Two-stage cook at a camera-locked board (trace→yield, stroke→grade, orthogon
 
 - One branch per task off `dev`; PR needs green CI + `reviewer-code` + `reviewer-reality`
 - Blocked after a full attempt → blocker report → `senior-advisor` (Opus); Locked-Decision conflicts go to Giahy, not the advisor
-- Session end: `TASKS.md` + `BUILD_LOG.md` + push — always
+- Session end: `TASKS.md` + `PROGRESS.md` + push — always
 - Pure logic (economy, offline bank, spoilage, conversion) ships with headless tests; feel ships with a playtest note
 
 ## Risk register
