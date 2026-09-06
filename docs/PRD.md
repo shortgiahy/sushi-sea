@@ -525,19 +525,19 @@ A system is ✅ only when **all** hold: wired end-to-end (actually called by the
 **Design session:** grill-me — one question at a time, walk the dependency tree, attach a recommended answer before Giahy decides. On lock: update §4 → check off in §12 → update `PROGRESS.md`.
 **Implementation session:** read §7 + §8 → pick the right agent → write code → code-reviewer → commit. Update `PROGRESS.md` (format there) and push before the container dies.
 
-Team model (grill-me 2026-07-05; agents live in the game repo's `.claude/agents/`, tuned from agency-agents):
+Team model (grill-me 2026-07-05, revised 2026-09-06 for a two-person team — Giahy director, Claude executor; agents live in the game repo's `.claude/agents/` as optional specialized tools, not a mandatory pipeline, tuned from agency-agents):
 
 | Agent | Model | Role |
 |------|-------|------|
 | `dev-systems` | Sonnet | Server services, DataStore, economy plumbing |
 | `dev-gameplay` | Sonnet | Fishing feel, cook/serve verbs, client controllers |
 | `dev-experience` | Sonnet | UX, retention, UI, monetization, design prep |
-| `reviewer-code` | Sonnet | Every PR — §8 + §7 + invariants |
-| `reviewer-reality` | Sonnet | Module-boundary DoD gate |
-| `senior-advisor` | Opus | Escalation only (advisor strategy) — advises, never implements |
+| `reviewer-code` | Sonnet | §8 + §7 + invariants check — run it, don't gate merges on it |
+| `reviewer-reality` | Sonnet | Module-boundary DoD evidence check — run it, don't gate merges on it |
+| `senior-advisor` | Opus | A second opinion on a hard technical problem — optional, not a required hop |
 
-- Orchestrator sessions run Sonnet; Haiku only for single-file mechanical tasks
-- Merge gate: feature branch → PR to `dev` (green CI + both reviewers) → Giahy gates `dev`→`main` at module boundaries
+- Sonnet by default; Haiku only for single-file mechanical tasks
+- Merge gate: PR straight to `main`, green CI + Giahy's review — no intermediate `dev` branch, no mandatory reviewer-agent approval
 - Reasoning lives in commits / PR Reasoning sections / repo `PROGRESS.md` — §8 comment rules unchanged
 - UI design tool: Figma (4th app alongside Studio, Blender, GitHub)
 

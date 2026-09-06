@@ -11,4 +11,4 @@ Developed by Claude agent teams under Giahy's direction.
 - `.claude/agents/` — the six-agent team (3 dev, 2 review, 1 Opus advisor)
 - `docs/runbooks/` — Giahy-action runbooks (Roblox Studio MCP; more as modules land)
 
-Branches: `claude/sushi-<feature>` → PR to `dev` → Giahy gates `main`.
+Branches: `claude/sushi-<feature>` → PR straight to `main`, Giahy reviews and merges.

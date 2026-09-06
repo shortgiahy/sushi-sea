@@ -2,7 +2,7 @@
 
 Execution plan for the agent team. Expands PRD §6 into phases, waves, assignments, and gates. PRD wins on any conflict. Statuses live in `TASKS.md`, never here.
 
-**How to use:** the orchestrator opens the current phase, dispatches the wave's tasks to the named agents (one branch per task), and does not start a module whose deps aren't `done` per the Definition of Done (PRD §11). Giahy Decision Points (🔶) are hard stops — no agent resolves them.
+**How to use:** work moves through the current phase's tasks (one branch per task, named agent is the lane it fits), and a module doesn't start until its deps are `done` per the Definition of Done (PRD §11). Giahy Decision Points (🔶) are hard stops — only Giahy resolves them.
 
 ---
 
@@ -109,13 +109,13 @@ Two-stage cook at a camera-locked board (trace→yield, stroke→grade, orthogon
 5. **Prestige/traffic formulas** (Thread #6 subset, Phase 4)
 6. **Legendary phase structure** (Thread #4, Phase 5)
 7. **Storm catalog + walkout rules + remaining Thread #6** (Phases 5–6)
-8. **dev→main merges** at every phase boundary
+8. **Merge to `main`** at every phase boundary
 9. **Publish** (always Giahy)
 
 ## Standing rules (every wave)
 
-- One branch per task off `dev`; PR needs green CI + `reviewer-code` + `reviewer-reality`
-- Blocked after a full attempt → blocker report → `senior-advisor` (Opus); Locked-Decision conflicts go to Giahy, not the advisor
+- One branch per task; PR straight to `main`, green CI required, Giahy reviews
+- Blocked after a full attempt, or a Locked-Decision/Open-Thread conflict → ask Giahy directly
 - Session end: `TASKS.md` + `PROGRESS.md` + push — always
 - Pure logic (economy, offline bank, spoilage, conversion) ships with headless tests; feel ships with a playtest note
 
@@ -123,7 +123,7 @@ Two-stage cook at a camera-locked board (trace→yield, stroke→grade, orthogon
 
 | Risk | Watch | Mitigation |
 |---|---|---|
-| Rod never passes the feel gate | M3 iteration count climbing | Budget multiple tuning rounds; escalate to senior-advisor for approach change, then Giahy for scope call — do NOT skip the gate |
+| Rod never passes the feel gate | M3 iteration count climbing | Budget multiple tuning rounds; ask Giahy for an approach or scope call — do NOT skip the gate |
 | Economy compounding outruns sinks | M7 model; net income/hr vs tier cost | Tune spoilage + tier pricing (strong dials); wages are weak |
 | Cook verb boring at 100×/session | M0 brief repetition scoring; slice-gate feedback | Verb must be re-lockable without rewriting ConversionModule (driver/logic split makes this cheap) |
 | Nigiri-only too shallow for weeks of play (Thread #2) | Slice-gate + Phase 4 playtests | Relief valves post-launch (attribute mixing, farming); pulling either forward is a Giahy scope decision |

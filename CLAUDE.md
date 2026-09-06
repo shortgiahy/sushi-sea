@@ -16,10 +16,10 @@ Roblox game (Luau, mobile-compatible, 18+). Fish → cook → serve → cash. Su
 
 ## Process
 
-- Orchestrator: Sonnet. Workers: Sonnet (Haiku only for single-file mechanical tasks). `senior-advisor` (Opus): escalation only — advises, never implements.
-- Branches: `claude/sushi-<feature>` off `dev`. PRs target `dev`; merge needs green CI + `reviewer-code` + `reviewer-reality`. `dev`→`main` is Giahy-only.
-- Session start: `PROGRESS.md`'s Status line for where things stand, `git fetch` + check open PRs/`dev` state, then pull whatever `TASKS.md`/`ROADMAP.md`/PRD section the task at hand actually needs.
-- Escalation: worker attempts fully first; blocked (architectural ambiguity, invariant conflict, 2 failed approaches) → blocker report → `senior-advisor` (Opus) advises, worker implements. PRD Locked Decision/Open Thread conflicts go to Giahy, not the advisor.
+- Model: Sonnet by default; Haiku only for single-file mechanical tasks; Opus (`senior-advisor`) for a second opinion on a genuinely hard technical problem — optional, not a required hop.
+- Branches: `claude/sushi-<feature>`, PR straight to `main`. Green CI + Giahy's review to merge — no intermediate `dev` branch (never real practice; every module has always merged straight to `main`) and no mandatory reviewer-agent gate. `reviewer-code`/`reviewer-reality` are still useful checks to run, just not a blocking requirement.
+- Session start: `PROGRESS.md`'s Status line for where things stand, `git fetch` + check open PRs/`main` state, then pull whatever `TASKS.md`/`ROADMAP.md`/PRD section the task at hand actually needs.
+- Blocked or ambiguous (architectural call, invariant conflict, a PRD Locked Decision/Open Thread) → ask Giahy directly. Director decides, executor implements — no intermediate escalation ladder.
 - Session end: update `TASKS.md`, replace `PROGRESS.md`'s status/last-session/next sections, push everything. Unpushed work is lost.
 - Publishing to Roblox and Blender/Figma work are Giahy actions — hand over runbooks, never assume automation.
 - Studio MCP (Giahy's machine only, never cloud), rule revised 2026-09-04: **code vs. building, not "read-only vs. not."** Game logic is always repo-authored and Rojo-synced — never hand-written into the place, since it wouldn't even survive a Play/Stop cycle. World building (terrain, NPCs, props, materials, placement) is normal Studio-native work, and MCP's authoring tools are fair game for it, same as building by hand. `docs/runbooks/roblox-studio-mcp.md`.
